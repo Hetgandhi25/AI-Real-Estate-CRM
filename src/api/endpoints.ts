@@ -1,0 +1,63 @@
+export const API_ENDPOINTS = {
+  auth: {
+    login: "/auth/login",
+    logout: "/auth/logout",
+    refresh: "/auth/refresh",
+    me: "/auth/me",
+    updateProfile: "/auth/me",
+  },
+  dashboard: {
+    summary: "/dashboard/summary",
+    analytics: "/dashboard/analytics",
+    search: "/dashboard/search",
+  },
+  properties: {
+    list: "/properties",
+    detail: (id: string) => `/properties/${id}`,
+    create: "/properties",
+    update: (id: string) => `/properties/${id}`,
+    delete: (id: string) => `/properties/${id}`,
+  },
+  customers: {
+    list: "/customers",
+    detail: (id: string) => `/customers/${id}`,
+    create: "/customers",
+    update: (id: string) => `/customers/${id}`,
+    delete: (id: string) => `/customers/${id}`,
+  },
+  leads: {
+    list: "/leads",
+    detail: (id: string) => `/leads/${id}`,
+    create: "/leads",
+    update: (id: string) => `/leads/${id}`,
+    delete: (id: string) => `/leads/${id}`,
+  },
+  agents: {
+    list: "/agents",
+    detail: (id: string) => `/agents/${id}`,
+    create: "/agents",
+    update: (id: string) => `/agents/${id}`,
+    delete: (id: string) => `/agents/${id}`,
+  },
+  conversations: {
+    list: "/conversations",
+    detail: (id: string) => `/conversations/${id}`,
+    create: "/conversations",
+    update: (id: string) => `/conversations/${id}`,
+    delete: (id: string) => `/conversations/${id}`,
+  },
+  reviews: {
+    list: "/reviews",
+    detail: (id: string) => `/reviews/${id}`,
+    create: "/reviews",
+    update: (id: string) => `/reviews/${id}`,
+    delete: (id: string) => `/reviews/${id}`,
+  },
+  appointments: {
+    list: "/appointments",
+    detail: (id: string) => `/appointments/${id}`,
+    create: "/appointments",
+    update: (id: string) => `/appointments/${id}`,
+    delete: (id: string) => `/appointments/${id}`,
+  },
+} as const;

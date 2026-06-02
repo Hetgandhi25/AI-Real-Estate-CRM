@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+*.log
+cookiejar.txt
+prisma/*.db
+prisma/*.db-journal
+typecheck-output.log
+
+sessions/

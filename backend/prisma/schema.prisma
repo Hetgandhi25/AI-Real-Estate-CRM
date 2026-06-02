@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  password     String
+  role         String    @default("agent")
+  refreshToken String?
+  properties   Property[]
+  leads        Lead[]    @relation("AgentLeads")
+  agentProfile Agent?
+  appointments  Appointment[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([email])
+}
+
+model Agent {
+  id               String  @id @default(uuid())
+  userId           String  @unique
+  experience       Int     @default(0)
+  specialization   String?
+  performanceScore Float   @default(0)
+  user             User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Property {
+  id           String   @id @default(uuid())
+  title        String
+  description  String
+  price        Float
+  city         String
+  state        String
+  address      String
+  propertyType String
+  bhk          Int
+  bathrooms    Int
+  area         String
+  amenities    String
+  images       String
+  status       String
+  featured     Boolean  @default(false)
+  availability String   @default("Available")
+  listedById   String
+  listedBy     User     @relation(fields: [listedById], references: [id], onDelete: Cascade)
+  leads        Lead[]
+  appointments Appointment[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([city, state])
+  @@index([propertyType, status])
+}
+
+model Customer {
+  id                String         @id @default(uuid())
+  name              String
+  phone             String
+  email             String         @unique
+  budget            Float?
+  preferredLocation String?
+  notes             String?
+  leads             Lead[]
+  conversations     Conversation[]
+  reviews           Review[]
+  appointments      Appointment[]
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  @@index([email])
+  @@index([phone])
+}
+
+model Lead {
+  id              String   @id @default(uuid())
+  customerId      String
+  propertyId      String
+  status          String   @default("NEW")
+  source          String
+  notes           String?
+  assignedAgentId String?
+  customer        Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  assignedAgent   User?    @relation("AgentLeads", fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([propertyId])
+  @@index([assignedAgentId])
+}
+
+model Conversation {
+  id         String   @id @default(uuid())
+  customerId String
+  messages   String
+  aiSummary  String?
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+model Review {
+  id           String   @id @default(uuid())
+  customerId   String
+  reviewerName String
+  rating       Int
+  comment      String
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([customerId])
+}
+
+model Appointment {
+  id              String    @id @default(uuid())
+  customerId      String
+  propertyId      String?
+  assignedAgentId String?
+  scheduledAt     DateTime
+  status          String    @default("SCHEDULED")
+  notes           String?
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  property        Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
+  assignedAgent   User?     @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([customerId])
+  @@index([assignedAgentId])
+}
+
+model Analytics {
+  id         String   @id @default(uuid())
+  metric     String
+  value      Float
+  recordedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([metric])
+}
