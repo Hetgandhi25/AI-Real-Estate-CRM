@@ -9,3 +9,5 @@ export * as appointmentService from "@/features/calendar/services/appointment.se
 export * as propertyService from "@/features/properties/services/property.service";
 export * as customerService from "@/features/customers/services/customer.service";
 export * as leadService from "@/features/leads/services/lead.service";
+export * as aiBotService from "@/features/ai-bot/services/ai-bot.service";
+

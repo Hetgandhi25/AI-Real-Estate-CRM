@@ -61,6 +61,7 @@ model Property {
 
   @@index([city, state])
   @@index([propertyType, status])
+  @@index([price])
 }
 
 model Customer {
@@ -102,16 +103,59 @@ model Lead {
 }
 
 model Conversation {
-  id         String   @id @default(uuid())
-  customerId String
-  messages   String
-  aiSummary  String?
-  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  createdAt  DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  customerId   String
+  messages     String
+  aiSummary    String?
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  messagesList Message[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   @@index([customerId])
 }
+
+model Message {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  from           String       // "customer" or "agent"
+  text           String
+  timestamp      DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([conversationId])
+  @@index([createdAt])
+}
+
+model AISession {
+  id           String   @id @default(uuid())
+  phone        String   @unique
+  collected    String   // JSON string of collected filters
+  pendingField String?
+  active       Boolean  @default(true)
+  lastActivity DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([phone])
+  @@index([active])
+  @@index([lastActivity])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  details   String
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([userId])
+}
+
 
 model Review {
   id           String   @id @default(uuid())
@@ -138,10 +182,12 @@ model Appointment {
   property        Property? @relation(fields: [propertyId], references: [id], onDelete: SetNull)
   assignedAgent   User?     @relation(fields: [assignedAgentId], references: [id], onDelete: SetNull)
   createdAt       DateTime  @default(now())
-  updatedAt       DateTime @updatedAt
+  updatedAt       DateTime  @updatedAt
 
   @@index([customerId])
   @@index([assignedAgentId])
+  @@index([propertyId])
+  @@index([scheduledAt])
 }
 
 model Analytics {
@@ -150,7 +196,8 @@ model Analytics {
   value      Float
   recordedAt DateTime @default(now())
   createdAt  DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt  DateTime @updatedAt
 
   @@index([metric])
 }
+

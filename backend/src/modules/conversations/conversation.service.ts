@@ -26,27 +26,31 @@ function serializeMessages(messages: ConversationMessage[]) {
   return JSON.stringify(messages);
 }
 
-/** Generate a structured mock AI response based on the last customer message */
-function generateAiResponse(messages: ConversationMessage[], customerName: string): string {
+/** Generate a response by calling the real OpenClaw agent runtime asynchronously */
+async function generateAiResponse(messages: ConversationMessage[], phone: string, customerName: string): Promise<string> {
   const lastCustomerMsg = [...messages].reverse().find((m) => m.from === "customer");
-  const text = lastCustomerMsg?.text?.toLowerCase() ?? "";
+  const text = lastCustomerMsg?.text ?? "";
 
-  if (text.includes("tour") || text.includes("visit") || text.includes("view")) {
-    return `Hi ${customerName}! I can schedule a property tour for you. Our agents are available Monday–Saturday, 9 AM–6 PM. Would you prefer a morning or afternoon slot?`;
+  try {
+    const { runOpenClawAgent } = await import("../whatsapp/openclaw.agent.js");
+    const reply = await runOpenClawAgent({
+      phone: phone || "simulation",
+      pushName: customerName,
+      userMessage: text,
+    });
+    return reply;
+  } catch (error: any) {
+    console.error("[Conversation Service] AI Agent execution failed, using fallback.", error.message);
+    
+    // Heuristic fallback if Ollama is offline
+    if (text.includes("tour") || text.includes("visit") || text.includes("view")) {
+      return `Hi ${customerName}! I can schedule a property tour for you. Our agents are available Monday–Saturday, 9 AM–6 PM. Would you prefer a morning or afternoon slot?`;
+    }
+    if (text.includes("price") || text.includes("cost") || text.includes("budget")) {
+      return `Great question! Based on your budget and preferences, I've identified 3 properties that match your criteria. I'll send you a detailed comparison report shortly.`;
+    }
+    return `Thank you for reaching out, ${customerName}! The AI Bot is currently busy, but an agent has been notified and will reply shortly.`;
   }
-  if (text.includes("price") || text.includes("cost") || text.includes("budget")) {
-    return `Great question! Based on your budget and preferences, I've identified 3 properties that match your criteria. I'll send you a detailed comparison report shortly.`;
-  }
-  if (text.includes("hoa") || text.includes("fee") || text.includes("maintenance")) {
-    return `HOA fees vary by property and typically cover maintenance, security, and amenities. I'll pull the exact details for the properties you're interested in.`;
-  }
-  if (text.includes("mortgage") || text.includes("loan") || text.includes("finance")) {
-    return `I can connect you with our trusted mortgage advisors who offer competitive rates. They can pre-qualify you within 24 hours. Shall I arrange a call?`;
-  }
-  if (text.includes("available") || text.includes("ready") || text.includes("move")) {
-    return `I'll check the current availability for your preferred properties right away. Most of our listings have flexible move-in timelines. I'll get back to you with exact dates.`;
-  }
-  return `Thank you for reaching out, ${customerName}! I've reviewed your inquiry and will have a detailed response ready within 2 hours. In the meantime, is there anything specific you'd like me to prioritize?`;
 }
 
 export async function listConversations(params?: { search?: string }) {
@@ -99,6 +103,22 @@ export async function createConversation(payload: ConversationPayload) {
     include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
   });
 
+  // Save individual message records to SQL Message table for granular analytics
+  for (const msg of messagesWithTimestamps) {
+    try {
+      await prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          from: msg.from,
+          text: msg.text,
+          timestamp: new Date(msg.timestamp),
+        },
+      });
+    } catch (msgErr) {
+      console.error("[Conversation Service] Failed to create message record", msgErr);
+    }
+  }
+
   return parseConversation(conversation);
 }
 
@@ -130,64 +150,88 @@ export async function addMessageToConversation(
   message: ConversationMessage,
   withAiResponse: boolean
 ) {
-  const conversation = await prisma.conversation.findUnique({
-    where: { id },
-    include: { customer: { select: { id: true, name: true, phone: true } } },
-  });
-  if (!conversation) {
-    throw new ApiError(404, "Conversation not found");
-  }
+  const { acquireLock } = await import("../whatsapp/openclaw.tools.js");
 
-  const existing: ConversationMessage[] =
-    typeof conversation.messages === "string"
-      ? JSON.parse(conversation.messages)
-      : (conversation.messages as ConversationMessage[]);
-
-  const newMessage = { ...message, timestamp: new Date().toISOString() };
-  const updatedMessages = [...existing, newMessage];
-
-  if (withAiResponse && message.from !== "agent") {
-    const aiText = generateAiResponse(updatedMessages, conversation.customer?.name ?? "there");
-    updatedMessages.push({
-      from: "agent",
-      text: aiText,
-      timestamp: new Date().toISOString(),
+  return acquireLock(id, async () => {
+    const conversation = await prisma.conversation.findUnique({
+      where: { id },
+      include: { customer: { select: { id: true, name: true, phone: true } } },
     });
-  }
-
-  const lastUserMsg = [...updatedMessages].reverse().find((m) => m.from === "customer");
-  const aiSummary = lastUserMsg
-    ? `Latest: "${lastUserMsg.text.slice(0, 80)}${lastUserMsg.text.length > 80 ? "…" : ""}"`
-    : conversation.aiSummary;
-
-  const updated = await prisma.conversation.update({
-    where: { id },
-    data: {
-      messages: serializeMessages(updatedMessages),
-      aiSummary,
-    },
-    include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
-  });
-
-  // If the agent replied from the CRM Messages UI, sync back to WhatsApp
-  if (message.from === "agent" && updated.customer?.phone) {
-    try {
-      const { sendWhatsAppMessage } = await import("../whatsapp/whatsapp.service.js");
-      await sendWhatsAppMessage(updated.customer.phone, message.text);
-    } catch (wsError) {
-      console.error("[WhatsApp Outbound Sync Error]", wsError);
+    if (!conversation) {
+      throw new ApiError(404, "Conversation not found");
     }
-  }
 
-  // Broadcast update via Socket.IO for real-time CRM updates
-  try {
-    const { broadcastConversationUpdate } = await import("../../socket.js");
-    broadcastConversationUpdate(updated.id, updated.customerId);
-  } catch (socketError) {
-    console.error("[Socket.IO Broadcast Error]", socketError);
-  }
+    const existing: ConversationMessage[] =
+      typeof conversation.messages === "string"
+        ? JSON.parse(conversation.messages)
+        : (conversation.messages as ConversationMessage[]);
 
-  return parseConversation(updated);
+    const newMessage = { ...message, timestamp: new Date().toISOString() };
+    const updatedMessages = [...existing, newMessage];
+
+    if (withAiResponse && message.from !== "agent") {
+      const aiText = await generateAiResponse(
+        updatedMessages,
+        conversation.customer?.phone || "simulation",
+        conversation.customer?.name ?? "there"
+      );
+      updatedMessages.push({
+        from: "agent",
+        text: aiText,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
+    const lastUserMsg = [...updatedMessages].reverse().find((m) => m.from === "customer");
+    const aiSummary = lastUserMsg
+      ? `Latest: "${lastUserMsg.text.slice(0, 80)}${lastUserMsg.text.length > 80 ? "…" : ""}"`
+      : conversation.aiSummary;
+
+    const updated = await prisma.conversation.update({
+      where: { id },
+      data: {
+        messages: serializeMessages(updatedMessages),
+        aiSummary,
+      },
+      include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
+    });
+
+    // Save individual message records to SQL Message table for granular analytics if manually added
+    if (!withAiResponse) {
+      try {
+        await prisma.message.create({
+          data: {
+            conversationId: updated.id,
+            from: message.from,
+            text: message.text,
+            timestamp: new Date(newMessage.timestamp),
+          },
+        });
+      } catch (msgErr) {
+        console.error("[Conversation Service] Failed to create manual message record", msgErr);
+      }
+    }
+
+    // If the agent replied from the CRM Messages UI, sync back to WhatsApp
+    if (message.from === "agent" && updated.customer?.phone) {
+      try {
+        const { sendWhatsAppMessage } = await import("../whatsapp/whatsapp.service.js");
+        await sendWhatsAppMessage(updated.customer.phone, message.text);
+      } catch (wsError) {
+        console.error("[WhatsApp Outbound Sync Error]", wsError);
+      }
+    }
+
+    // Broadcast update via Socket.IO for real-time CRM updates
+    try {
+      const { broadcastConversationUpdate } = await import("../../socket.js");
+      broadcastConversationUpdate(updated.id, updated.customerId);
+    } catch (socketError) {
+      console.error("[Socket.IO Broadcast Error]", socketError);
+    }
+
+    return parseConversation(updated);
+  });
 }
 
 export async function deleteConversation(id: string) {

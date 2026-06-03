@@ -9,6 +9,7 @@ import { agentRouter } from "../modules/agents/agent.route.js";
 import { conversationRouter } from "../modules/conversations/conversation.route.js";
 import { reviewRouter } from "../modules/reviews/review.route.js";
 import { appointmentRouter } from "../modules/appointments/appointment.route.js";
+import { aiBotRouter } from "../modules/ai-bot/ai-bot.route.js";
 
 export const apiRouter = Router();
 apiRouter.use("/auth", authRouter);
@@ -21,3 +22,5 @@ apiRouter.use("/agents", agentRouter);
 apiRouter.use("/conversations", conversationRouter);
 apiRouter.use("/reviews", reviewRouter);
 apiRouter.use("/appointments", appointmentRouter);
+apiRouter.use("/ai-bot", aiBotRouter);
+

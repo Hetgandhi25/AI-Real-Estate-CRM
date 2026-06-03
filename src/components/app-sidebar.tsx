@@ -5,6 +5,7 @@ import { env } from "@/config/env";
 
 const nav = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/ai-bot", label: "AI PropertyBot", icon: Bot },
   { to: "/property", label: "Property", icon: Building2 },
   { to: "/customers", label: "Customers", icon: Users },
   { to: "/leads", label: "Leads", icon: FileText },
@@ -15,6 +16,7 @@ const nav = [
   { to: "/calendar", label: "Calendar", icon: Calendar },
   { to: "/settings", label: "Settings", icon: Settings },
 ] as const;
+
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });

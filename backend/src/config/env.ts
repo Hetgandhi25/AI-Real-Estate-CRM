@@ -14,7 +14,7 @@ const envSchema = z.object({
   COOKIE_SECURE: z.preprocess((value) => value === "true" || value === true, z.boolean()).default(false),
   REFRESH_TOKEN_COOKIE_NAME: z.string().default("refresh_token"),
   OLLAMA_BASE_URL: z.string().url().default("http://192.168.100.16:11434"),
-  OLLAMA_MODEL: z.string().default("qwen3:8b"),
+  OLLAMA_MODEL: z.string().default("qwen3:latest"),
   WHATSAPP_SESSION_DIR: z.string().default("./sessions"),
 });
 
