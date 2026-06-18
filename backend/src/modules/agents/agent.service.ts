@@ -1,4 +1,4 @@
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import { prisma } from "../../prisma/index.js";
 import { ApiError } from "../../common/lib/api-error.js";
 import type { AuthUser } from "../../common/types/auth.js";

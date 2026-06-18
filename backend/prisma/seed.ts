@@ -5,7 +5,6 @@ const prisma = new PrismaClient();
 const SALT_ROUNDS = 10;
 
 async function main() {
-  // ─── Clean slate ───────────────────────────────────────────────────────────
   await prisma.analytics.deleteMany();
   await prisma.appointment.deleteMany();
   await prisma.review.deleteMany();
@@ -16,7 +15,6 @@ async function main() {
   await prisma.agent.deleteMany();
   await prisma.user.deleteMany();
 
-  // ─── Passwords ─────────────────────────────────────────────────────────────
   const [adminPassword, agentPassword, testPassword, managerPassword] = await Promise.all([
     bcrypt.hash("Admin@123", SALT_ROUNDS),
     bcrypt.hash("Agent@123", SALT_ROUNDS),
@@ -24,7 +22,6 @@ async function main() {
     bcrypt.hash("Manager@123", SALT_ROUNDS),
   ]);
 
-  // ─── Users ─────────────────────────────────────────────────────────────────
   const admin = await prisma.user.create({
     data: {
       name: "Admin User",
@@ -79,7 +76,6 @@ async function main() {
     },
   });
 
-  // ─── Agent Profiles ────────────────────────────────────────────────────────
   const agentProfile1 = await prisma.agent.create({
     data: {
       userId: agentUser.id,
@@ -107,7 +103,6 @@ async function main() {
     },
   });
 
-  // ─── Customers ─────────────────────────────────────────────────────────────
   await prisma.customer.createMany({
     data: [
       {
@@ -164,7 +159,6 @@ async function main() {
   const savedCustomers = await prisma.customer.findMany({ orderBy: { createdAt: "asc" } });
   const [ava, noah, chloe, marcus, emma, liam] = savedCustomers;
 
-  // ─── Properties ────────────────────────────────────────────────────────────
   await prisma.property.createMany({
     data: [
       {
@@ -303,13 +297,46 @@ async function main() {
         featured: false,
         listedById: agentUser.id,
       },
+      {
+        title: "Gota Residency Flat",
+        description: "Cozy 2 BHK flat in Gota.",
+        price: 4500000,
+        city: "Ahmedabad",
+        state: "Gujarat",
+        address: "Gota",
+        propertyType: "APARTMENT",
+        bhk: 2,
+        bathrooms: 2,
+        area: "1000 sqft",
+        amenities: JSON.stringify(["Parking", "Gym"]),
+        images: JSON.stringify([]),
+        status: "FOR_SALE",
+        featured: true,
+        listedById: agentUser.id,
+      },
+      {
+        title: "Shreeji Heights Gota",
+        description: "Beautiful 2 BHK apartment in Gota.",
+        price: 5000000,
+        city: "Ahmedabad",
+        state: "Gujarat",
+        address: "Gota",
+        propertyType: "APARTMENT",
+        bhk: 2,
+        bathrooms: 2,
+        area: "1000 sqft",
+        amenities: JSON.stringify(["Parking", "Elevator"]),
+        images: JSON.stringify([]),
+        status: "FOR_SALE",
+        featured: false,
+        listedById: agentUser.id,
+      },
     ],
   });
 
   const savedProperties = await prisma.property.findMany({ orderBy: { createdAt: "asc" } });
   const [bayview, midtown, miami, chicago, seattle, austin, manhattan, malibu] = savedProperties;
 
-  // ─── Leads ─────────────────────────────────────────────────────────────────
   await prisma.lead.createMany({
     data: [
       {
@@ -371,7 +398,6 @@ async function main() {
     ],
   });
 
-  // ─── Conversations ─────────────────────────────────────────────────────────
   await prisma.conversation.createMany({
     data: [
       {
@@ -415,7 +441,6 @@ async function main() {
     ],
   });
 
-  // ─── Reviews ───────────────────────────────────────────────────────────────
   await prisma.review.createMany({
     data: [
       {
@@ -451,7 +476,6 @@ async function main() {
     ],
   });
 
-  // ─── Appointments ──────────────────────────────────────────────────────────
   const now = new Date();
   const daysFromNow = (d: number) => new Date(now.getFullYear(), now.getMonth(), now.getDate() + d, 10, 0, 0);
 
@@ -485,7 +509,7 @@ async function main() {
         customerId: emma.id,
         propertyId: seattle.id,
         assignedAgentId: agentUser3.id,
-        scheduledAt: daysFromNow(0), // Today
+        scheduledAt: daysFromNow(0),
         status: "CONFIRMED",
         notes: "Office lease negotiation meeting.",
       },
@@ -501,14 +525,13 @@ async function main() {
         customerId: marcus.id,
         propertyId: chicago.id,
         assignedAgentId: agentUser2.id,
-        scheduledAt: daysFromNow(-2), // Past
+        scheduledAt: daysFromNow(-2),
         status: "COMPLETED",
         notes: "Pre-closing walkthrough completed successfully.",
       },
     ],
   });
 
-  // ─── Analytics — 6 months of monthly revenue data ─────────────────────────
   const monthlyRevenueData = [
     { month: -5, value: 142000 },
     { month: -4, value: 168000 },
@@ -542,13 +565,6 @@ async function main() {
   });
 
   console.log("✅ Seed data created successfully.");
-  console.log("─────────────────────────────────────────────────");
-  console.log("Test Accounts:");
-  console.log("  ADMIN   admin@yandoxcrm.com   / Admin@123");
-  console.log("  MANAGER manager@yandoxcrm.com / Manager@123");
-  console.log("  AGENT   agent@yandoxcrm.com   / Agent@123");
-  console.log("  TEST    test@yandoxcrm.com     / Test@123");
-  console.log("─────────────────────────────────────────────────");
 }
 
 main()

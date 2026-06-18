@@ -222,3 +222,10 @@ export const topAgents = [
   { name: "David Yers", role: "Agent", sales: 84, avatar: "DY" },
   { name: "Hawkins Maru", role: "Manager", sales: 72, avatar: "HM" },
 ];
+
+export const revenueBreakdown = [
+  { propertyId: "p1", title: "Metro Jayakar Apartment", address: "230 Metro Lane", income: 110000 },
+  { propertyId: "p3", title: "Skyline Residency", address: "58 Skyline Avenue", income: 75000 },
+  { propertyId: "p5", title: "Azure Bay Villa", address: "88 Azure Bay", income: 30000 },
+  { propertyId: "p8", title: "Harbor View Penthouse", address: "9 Harbor Road", income: 21535 },
+];

@@ -77,15 +77,29 @@ function parseType(text: string) {
 // ─────────────────────────────────────────────────────────────
 // LOCATION PARSER
 // ─────────────────────────────────────────────────────────────
-const KNOWN_CITIES = [
+import { prisma } from "../../prisma/index.js";
+
+let KNOWN_CITIES = [
   "ahmedabad", "mumbai", "delhi", "pune", "gurgaon", "bangalore",
   "hyderabad", "chennai", "kolkata", "surat", "vadodara"
 ];
 
+// Async IIFE to fetch cities dynamically without blocking exports
+(async () => {
+  try {
+    const cities = await prisma.city.findMany({ select: { name: true } });
+    if (cities && cities.length > 0) {
+      KNOWN_CITIES = cities.map(c => c.name.toLowerCase());
+    }
+  } catch (e) {
+    // ignore
+  }
+})();
+
 const KNOWN_LOCALITIES = [
   "gota", "satellite", "vastral", "chandkheda", "bopal", "maninagar",
   "navrangpura", "prahlad nagar", "sg highway", "thaltej", "vejalpur",
-  "naranpura", "nikol", "naroda", "isanpur",
+  "naranpura", "nikol", "naroda", "isanpur", "shela", "shilaj", "ghuma",
   "andheri", "bandra", "borivali", "dadar", "goregaon",
   "kandivali", "malad", "thane", "powai", "worli",
   "dwarka", "rohini", "saket", "vasant kunj", "janakpuri",
@@ -156,6 +170,40 @@ function parseLocation(text: string) {
         return { value: city, confidence: "medium" };
       }
     }
+  }
+
+  // 4. GENERAL FALLBACK — Strategy A: word(s) after preposition
+  const afterPrepMatch = q.match(
+    /\b(?:in|at|near|around)\s+([a-z][a-z\s]{1,30})(?:\s+(?:under|below|above|over|between|upto|bhk|lakh|lac|crore|cr|rs|inr|below|budget)|$)/i
+  );
+  if (afterPrepMatch) {
+    const candidate = afterPrepMatch[1].trim();
+    const candidateWords = candidate.split(/\s+/).filter(w => w.length >= 2);
+    const allClean = candidateWords.length > 0 &&
+      candidateWords.every(w => !LOCATION_DISQUALIFY_TOKENS.has(w) && !/^\d/.test(w));
+    if (allClean) {
+      return { value: candidate, confidence: "low" };
+    }
+  }
+
+  // 4b. Strategy A (simpler regex fallback)
+  const simplePrepMatch = q.match(/\b(?:in|at|near|around)\s+([a-z][a-z\s]{1,25})$/i);
+  if (simplePrepMatch) {
+    const candidate = simplePrepMatch[1].trim();
+    const candidateWords = candidate.split(/\s+/).filter(w => w.length >= 2);
+    const allClean = candidateWords.length > 0 &&
+      candidateWords.every(w => !LOCATION_DISQUALIFY_TOKENS.has(w) && !/^\d/.test(w));
+    if (allClean) {
+      return { value: candidate, confidence: "low" };
+    }
+  }
+
+  // 4c. Strategy B: last clean word in sentence
+  const cleanWords = words.filter(
+    w => !LOCATION_DISQUALIFY_TOKENS.has(w) && !/^\d+(\.\d+)?$/.test(w) && w.length >= 3
+  );
+  if (cleanWords.length > 0) {
+    return { value: cleanWords[cleanWords.length - 1], confidence: "low" };
   }
 
   return null;
@@ -360,6 +408,7 @@ export class Session {
   isAdLead: boolean;
   adSource: string | null;
   lastActivity: number;
+  lastPropertyIds: string[];
   private _timer: NodeJS.Timeout | null;
 
   constructor(userId: string) {
@@ -370,6 +419,7 @@ export class Session {
     this.isAdLead = false;
     this.adSource = null;
     this.lastActivity = Date.now();
+    this.lastPropertyIds = [];
     this._timer = null;
   }
 
@@ -383,6 +433,7 @@ export class Session {
     this.active = false;
     this.isAdLead = false;
     this.adSource = null;
+    this.lastPropertyIds = [];
     this._resetTimer();
   }
 

@@ -1,21 +1,8 @@
 import { prisma } from "../../prisma/index.js";
+import { mapPropertyToDTO } from "../properties/property.mapper.js";
+import { normalizePhone } from "../../common/lib/phone.utils.js";
 
-// Thread-safe in-memory mutex to serialize user operations
-const locks = new Map<string, Promise<any>>();
-
-export async function acquireLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-  const existing = locks.get(key);
-  const nextPromise = (existing || Promise.resolve()).catch(() => {}).then(fn);
-  locks.set(key, nextPromise);
-  
-  try {
-    return await nextPromise;
-  } finally {
-    if (locks.get(key) === nextPromise) {
-      locks.delete(key);
-    }
-  }
-}
+const STRICT_TOOL_PROPERTY_SELECT = { id: true, title: true, description: true, price: true, city: true, state: true, address: true, propertyType: true, bhk: true, bathrooms: true, area: true, amenities: true, images: true, status: true, location: { select: { name: true, city: { select: { name: true, state: { select: { name: true } } } } } } };
 
 // UUID validation helper to prevent SQL parameter errors in PostgreSQL
 export function isValidUUID(id: string): boolean {
@@ -28,6 +15,7 @@ export function isValidUUID(id: string): boolean {
  */
 export async function searchProperties(params: {
   budget?: number;
+  minPrice?: number;
   city?: string;
   location?: string;
   propertyType?: string;
@@ -35,10 +23,11 @@ export async function searchProperties(params: {
   amenities?: string;
   status?: string;
 }) {
-  const { budget, city, location, propertyType, BHK, amenities, status } = params;
+  const { budget, minPrice, city, location, propertyType, BHK, amenities, status } = params;
 
   // budget is usually Lakhs (e.g. 80 Lakhs)
-  const maxPrice = budget ? (budget < 10000 ? budget * 100000 : budget) : undefined;
+  const maxPriceVal = budget ? (budget < 10000 ? budget * 100000 : budget) : undefined;
+  const minPriceVal = minPrice ? (minPrice < 10000 ? minPrice * 100000 : minPrice) : undefined;
 
   let typeFilter: any = undefined;
   if (propertyType) {
@@ -58,32 +47,23 @@ export async function searchProperties(params: {
   const properties = await prisma.property.findMany({
     where: {
       status: status || { in: ["FOR_SALE", "FOR_RENT"] },
-      price: maxPrice ? { lte: maxPrice } : undefined,
-      city: city ? { contains: city, mode: "insensitive" } : undefined,
-      address: location ? { contains: location, mode: "insensitive" } : undefined,
+      price: (minPriceVal || maxPriceVal) ? {
+        gte: minPriceVal ? minPriceVal : undefined,
+        lte: maxPriceVal ? maxPriceVal : undefined,
+      } : undefined,
+      location: city || location ? {
+        name: location ? { contains: location, mode: "insensitive" } : undefined,
+        city: city ? { name: { contains: city, mode: "insensitive" } } : undefined
+      } : undefined,
       propertyType: typeFilter,
       bhk: BHK ? BHK : undefined,
       amenities: amenities ? { contains: amenities, mode: "insensitive" } : undefined,
     },
+    select: STRICT_TOOL_PROPERTY_SELECT,
     take: 5,
   });
 
-  return properties.map((p) => ({
-    id: p.id,
-    title: p.title,
-    description: p.description,
-    price: p.price,
-    city: p.city,
-    state: p.state,
-    address: p.address,
-    propertyType: p.propertyType,
-    bhk: p.bhk,
-    bathrooms: p.bathrooms,
-    area: p.area,
-    amenities: p.amenities,
-    images: p.images,
-    status: p.status,
-  }));
+  return properties.map(mapPropertyToDTO);
 }
 
 /**
@@ -96,24 +76,10 @@ export async function getPropertyDetails(params: { propertyId: string }) {
   }
   const p = await prisma.property.findUnique({
     where: { id: propertyId },
+    select: STRICT_TOOL_PROPERTY_SELECT,
   });
   if (!p) return null;
-  return {
-    id: p.id,
-    title: p.title,
-    description: p.description,
-    price: p.price,
-    city: p.city,
-    state: p.state,
-    address: p.address,
-    propertyType: p.propertyType,
-    bhk: p.bhk,
-    bathrooms: p.bathrooms,
-    area: p.area,
-    amenities: p.amenities,
-    images: p.images,
-    status: p.status,
-  };
+  return mapPropertyToDTO(p);
 }
 
 /**
@@ -131,7 +97,7 @@ export async function createLead(params: {
 }) {
   const { name, phone, email, budget, location, propertyType, propertyId, notes } = params;
 
-  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  const cleanPhone = normalizePhone(phone);
   const cleanEmail = email || `${cleanPhone}@whatsapp.yandox.com`;
   const budgetVal = budget ? (budget < 10000 ? budget * 100000 : budget) : null;
 
@@ -139,50 +105,29 @@ export async function createLead(params: {
     throw new Error("Invalid propertyId format. Must be a valid UUID.");
   }
 
-  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
-
   // Find or Create Customer
-  let customer = await prisma.customer.findFirst({
-    where: {
-      OR: [
-        { phone: { endsWith: last10 } },
-        { email: cleanEmail },
-      ],
+  let customer = await prisma.customer.upsert({
+    where: { phone: cleanPhone },
+    update: {
+      name: name || undefined,
+      budget: budgetVal || undefined,
+      preferredLocation: location || undefined,
+    },
+    create: {
+      name: name || `WhatsApp User ${cleanPhone}`,
+      phone: cleanPhone,
+      email: cleanEmail,
+      budget: budgetVal,
+      preferredLocation: location || null,
+      notes: notes || "Created automatically via WhatsApp PropertyBot.",
     },
   });
 
-  if (customer) {
+  if (notes && !customer.notes?.includes(notes)) {
     customer = await prisma.customer.update({
       where: { id: customer.id },
-      data: {
-        name: name || customer.name,
-        budget: budgetVal || customer.budget,
-        preferredLocation: location || customer.preferredLocation,
-        notes: notes ? `${customer.notes || ""}\n${notes}`.trim() : customer.notes,
-      },
+      data: { notes: customer.notes ? `${customer.notes}\n${notes}` : notes },
     });
-  } else {
-    try {
-      customer = await prisma.customer.create({
-        data: {
-          name: name || `WhatsApp User ${cleanPhone}`,
-          phone: cleanPhone,
-          email: cleanEmail,
-          budget: budgetVal,
-          preferredLocation: location || null,
-          notes: notes || "Created automatically via WhatsApp PropertyBot.",
-        },
-      });
-    } catch (error: any) {
-      if (error.code === "P2002") {
-        customer = await prisma.customer.findUnique({
-          where: { email: cleanEmail },
-        });
-        if (!customer) throw error;
-      } else {
-        throw error;
-      }
-    }
   }
 
   // Check if lead already exists for this customer and property to prevent duplicates
@@ -237,40 +182,23 @@ export async function scheduleSiteVisit(params: {
   notes?: string;
 }) {
   const { phone, propertyId, date, time, notes } = params;
-  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  const cleanPhone = normalizePhone(phone);
   const cleanEmail = `${cleanPhone}@whatsapp.yandox.com`;
 
   if (propertyId && !isValidUUID(propertyId)) {
     throw new Error("Invalid propertyId format. Must be a valid UUID.");
   }
 
-  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
-
-  let customer = await prisma.customer.findFirst({
-    where: { phone: { endsWith: last10 } },
+  let customer = await prisma.customer.upsert({
+    where: { phone: cleanPhone },
+    update: {},
+    create: {
+      name: `WhatsApp User ${cleanPhone}`,
+      phone: cleanPhone,
+      email: cleanEmail,
+      notes: "Created automatically for site visit scheduling.",
+    },
   });
-
-  if (!customer) {
-    try {
-      customer = await prisma.customer.create({
-        data: {
-          name: `WhatsApp User ${cleanPhone}`,
-          phone: cleanPhone,
-          email: cleanEmail,
-          notes: "Created automatically for site visit scheduling.",
-        },
-      });
-    } catch (error: any) {
-      if (error.code === "P2002") {
-        customer = await prisma.customer.findUnique({
-          where: { email: cleanEmail },
-        });
-        if (!customer) throw error;
-      } else {
-        throw error;
-      }
-    }
-  }
 
   let scheduledAt = new Date();
   try {
@@ -336,42 +264,20 @@ export async function saveConversation(params: {
   messages: Array<{ from: string; text: string; timestamp?: string }>;
 }) {
   const { phone, pushName, messages } = params;
-  const cleanPhone = phone.replace(/[^0-9]/g, "");
+  const cleanPhone = normalizePhone(phone);
   const cleanEmail = `${cleanPhone}@whatsapp.yandox.com`;
 
-  const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
-
   // Get or Create Customer
-  let customer = await prisma.customer.findFirst({
-    where: {
-      OR: [
-        { phone: { endsWith: last10 } },
-        { email: cleanEmail },
-      ],
+  let customer = await prisma.customer.upsert({
+    where: { phone: cleanPhone },
+    update: {},
+    create: {
+      name: pushName || `WhatsApp User ${cleanPhone}`,
+      phone: cleanPhone,
+      email: cleanEmail,
+      notes: "Created automatically via WhatsApp bot.",
     },
   });
-
-  if (!customer) {
-    try {
-      customer = await prisma.customer.create({
-        data: {
-          name: pushName || `WhatsApp User ${cleanPhone}`,
-          phone: cleanPhone,
-          email: cleanEmail,
-          notes: "Created automatically via WhatsApp bot.",
-        },
-      });
-    } catch (error: any) {
-      if (error.code === "P2002") {
-        customer = await prisma.customer.findUnique({
-          where: { email: cleanEmail },
-        });
-        if (!customer) throw error;
-      } else {
-        throw error;
-      }
-    }
-  }
 
   // Get or Create Conversation
   let conversation = await prisma.conversation.findFirst({

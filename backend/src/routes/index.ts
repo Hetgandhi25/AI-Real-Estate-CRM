@@ -10,6 +10,7 @@ import { conversationRouter } from "../modules/conversations/conversation.route.
 import { reviewRouter } from "../modules/reviews/review.route.js";
 import { appointmentRouter } from "../modules/appointments/appointment.route.js";
 import { aiBotRouter } from "../modules/ai-bot/ai-bot.route.js";
+import { whatsappRouter } from "../modules/whatsapp/whatsapp.route.js";
 
 export const apiRouter = Router();
 apiRouter.use("/auth", authRouter);
@@ -23,4 +24,5 @@ apiRouter.use("/conversations", conversationRouter);
 apiRouter.use("/reviews", reviewRouter);
 apiRouter.use("/appointments", appointmentRouter);
 apiRouter.use("/ai-bot", aiBotRouter);
+apiRouter.use("/whatsapp/webhook", whatsappRouter);
 

@@ -44,6 +44,13 @@ export type ConversionItem = {
   total: number;
 };
 
+export type RevenueBreakdownItem = {
+  propertyId: string;
+  title: string;
+  address: string;
+  income: number;
+};
+
 export type DashboardSummary = {
   kpis: KpiItem[];
   revenueData: RevenuePoint[];
@@ -52,6 +59,7 @@ export type DashboardSummary = {
   propertyTypes: PropertyTypeSlice[];
   topAgents: TopAgent[];
   conversions?: ConversionItem[];
+  revenueBreakdown?: RevenueBreakdownItem[];
 };
 
 // ── Analytics ────────────────────────────────────────────────────────────────

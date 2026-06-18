@@ -1,79 +1,101 @@
 import { env } from "../../config/env.js";
+import { logger } from "../../lib/logger.js";
+import { circuitBreakerState, ollamaGenerationDuration } from "../../lib/metrics.js";
+
+type CircuitState = "CLOSED" | "OPEN" | "HALF_OPEN";
 
 export class OllamaService {
   // Circuit Breaker state variables
-  private static circuitOpen = false;
+  private static state: CircuitState = "CLOSED";
   private static nextAttemptTime = 0;
   private static consecutiveFailures = 0;
   private static FAILURE_THRESHOLD = 3;
-  private static COOLDOWN_MS = 60000; // 1 minute cooldown
+  private static COOLDOWN_MS = 60000; // 60 seconds
+  private static REQUEST_TIMEOUT_MS = 45000; // 45 seconds
 
   /**
-   * Helper to perform fetch requests with a timeout, retry, and circuit breaker logic.
+   * Identifies transient, network, or resource exhaustion errors.
    */
-  private static async fetchWithTimeout(
-    url: string,
-    options: RequestInit & { timeout?: number; retries?: number }
-  ): Promise<Response> {
-    const { timeout = 5000, retries = 1, ...fetchOptions } = options; // Default timeout 5s, retries 1
-    
-    // Check Circuit Breaker
-    const now = Date.now();
-    if (this.circuitOpen) {
-      if (now > this.nextAttemptTime) {
-        // Cooldown period expired, try to half-open the circuit
-        this.circuitOpen = false;
-        console.log("[Ollama Service] Circuit breaker HALF-OPEN. Attempting connection...");
-      } else {
-        // Circuit is open, fail fast
-        throw new Error("Ollama circuit breaker is OPEN. Fast-failing to fallback.");
-      }
-    }
-
-    let attempt = 0;
-    
-    while (attempt <= retries) {
-      const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), timeout);
-      
-      try {
-        const response = await fetch(url, {
-          ...fetchOptions,
-          signal: controller.signal,
-        });
-        clearTimeout(id);
-        
-        if (response.ok) {
-          // Success! Reset consecutive failures
-          this.consecutiveFailures = 0;
-          this.circuitOpen = false;
-        } else {
-          // Response not ok, treat as failure
-          this.handleFailure();
-        }
-
-        return response;
-      } catch (err: any) {
-        clearTimeout(id);
-        attempt++;
-        if (attempt > retries) {
-          this.handleFailure();
-          throw err;
-        }
-        // Wait with exponential backoff
-        await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 500));
-      }
-    }
-    this.handleFailure();
-    throw new Error("Request failed after retries");
+  private static isNetworkOrOllamaError(err: any): boolean {
+    const msg = (err.message || String(err)).toLowerCase();
+    return (
+      msg.includes("timeout") ||
+      msg.includes("econnreset") ||
+      msg.includes("connection refused") ||
+      msg.includes("unavailable") ||
+      msg.includes("oom") ||
+      msg.includes("out of memory") ||
+      msg.includes("abort") ||
+      msg.includes("fetch failed")
+    );
   }
 
-  private static handleFailure() {
+  /**
+   * Helper to perform fetch requests governed by a Circuit Breaker.
+   */
+  private static async fetchWithCircuitBreaker(
+    url: string,
+    options: RequestInit
+  ): Promise<Response> {
+    const now = Date.now();
+    
+    if (this.state === "OPEN") {
+      if (now >= this.nextAttemptTime) {
+        this.state = "HALF_OPEN";
+        const elapsed = now - (this.nextAttemptTime - this.COOLDOWN_MS);
+        circuitBreakerState.set(0.5); // 0.5 for HALF_OPEN
+        logger.warn({ elapsed }, "Circuit Breaker state changed to HALF_OPEN. Testing connection...");
+      } else {
+        throw new Error("Ollama Circuit Breaker is OPEN. Fast-failing request.");
+      }
+    }
+
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), this.REQUEST_TIMEOUT_MS);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(id);
+      
+      if (response.ok) {
+        if (this.state === "HALF_OPEN" || this.consecutiveFailures > 0) {
+          const prevFailures = this.consecutiveFailures;
+          this.state = "CLOSED";
+          this.consecutiveFailures = 0;
+          circuitBreakerState.set(0);
+          logger.info({ prevFailures }, "Circuit Breaker state changed to CLOSED. Connection restored.");
+        }
+        return response;
+      } else {
+        // If 5xx, treat as Ollama failure
+        if (response.status >= 500) {
+          throw new Error(`Ollama unavailable (HTTP ${response.status})`);
+        }
+        return response; // 4xx errors are client errors, not circuit breaker issues
+      }
+    } catch (err: any) {
+      clearTimeout(id);
+      
+      if (this.isNetworkOrOllamaError(err)) {
+        this.recordFailure(err);
+      }
+      throw err;
+    }
+  }
+
+  private static recordFailure(err: any) {
     this.consecutiveFailures++;
-    if (this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
-      this.circuitOpen = true;
+    
+    if (this.state === "HALF_OPEN" || this.consecutiveFailures >= this.FAILURE_THRESHOLD) {
+      this.state = "OPEN";
       this.nextAttemptTime = Date.now() + this.COOLDOWN_MS;
-      console.warn(`[Ollama Service] Circuit breaker OPENED for 60s after ${this.consecutiveFailures} consecutive failures.`);
+      circuitBreakerState.set(1);
+      logger.error({ err: err.message, failures: this.consecutiveFailures, cooldown: this.COOLDOWN_MS }, "Circuit Breaker state changed to OPEN.");
+    } else {
+      logger.warn({ err: err.message, failures: this.consecutiveFailures, threshold: this.FAILURE_THRESHOLD }, "Circuit Breaker failure recorded.");
     }
   }
 
@@ -82,33 +104,46 @@ export class OllamaService {
    */
   static async chat(
     messages: { role: string; content: string }[],
-    options: { temperature?: number; top_p?: number; num_predict?: number; rawOptions?: any } = {}
+    options: { temperature?: number; top_p?: number; num_predict?: number; format?: string; rawOptions?: any } = {}
   ): Promise<{ message: { role: string; content: string } }> {
     const url = `${env.OLLAMA_BASE_URL}/api/chat`;
     
-    const response = await this.fetchWithTimeout(url, {
+    const { format, rawOptions, ...restOptions } = options;
+    const formatValue = format || (rawOptions && rawOptions.format) || undefined;
+    const cleanRaw = { ...rawOptions };
+    if (cleanRaw.format) delete cleanRaw.format;
+
+    const endTimer = ollamaGenerationDuration.startTimer();
+    try {
+      const response = await this.fetchWithCircuitBreaker(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: env.OLLAMA_MODEL,
         messages,
         stream: false,
+        format: formatValue,
         options: {
-          temperature: options.temperature ?? 0.3,
-          top_p: options.top_p ?? 0.9,
-          num_predict: options.num_predict ?? 512,
-          ...options.rawOptions,
+          temperature: restOptions.temperature ?? 0.3,
+          top_p: restOptions.top_p ?? 0.9,
+          num_predict: restOptions.num_predict ?? 512,
+          ...cleanRaw,
         },
       }),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Ollama chat failed with status ${response.status}: ${errText}`);
-    }
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Ollama chat failed with status ${response.status}: ${errText}`);
+      }
 
-    const data = (await response.json()) as any;
-    return data;
+      const data = (await response.json()) as any;
+      endTimer();
+      return data;
+    } catch (err) {
+      endTimer();
+      throw err;
+    }
   }
 
   /**
@@ -116,32 +151,45 @@ export class OllamaService {
    */
   static async generate(
     prompt: string,
-    options: { temperature?: number; top_p?: number; rawOptions?: any } = {}
+    options: { temperature?: number; top_p?: number; format?: string; rawOptions?: any } = {}
   ): Promise<{ response: string }> {
     const url = `${env.OLLAMA_BASE_URL}/api/generate`;
 
-    const response = await this.fetchWithTimeout(url, {
+    const { format, rawOptions, ...restOptions } = options;
+    const formatValue = format || (rawOptions && rawOptions.format) || undefined;
+    const cleanRaw = { ...rawOptions };
+    if (cleanRaw.format) delete cleanRaw.format;
+
+    const endTimer = ollamaGenerationDuration.startTimer();
+    try {
+      const response = await this.fetchWithCircuitBreaker(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: env.OLLAMA_MODEL,
         prompt,
         stream: false,
+        format: formatValue,
         options: {
-          temperature: options.temperature ?? 0.3,
-          top_p: options.top_p ?? 0.9,
-          ...options.rawOptions,
+          temperature: restOptions.temperature ?? 0.3,
+          top_p: restOptions.top_p ?? 0.9,
+          ...cleanRaw,
         },
       }),
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      throw new Error(`Ollama generate failed with status ${response.status}: ${errText}`);
-    }
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Ollama generate failed with status ${response.status}: ${errText}`);
+      }
 
-    const data = (await response.json()) as any;
-    return data;
+      const data = (await response.json()) as any;
+      endTimer();
+      return data;
+    } catch (err) {
+      endTimer();
+      throw err;
+    }
   }
 
   /**
@@ -150,21 +198,27 @@ export class OllamaService {
   static async stream(
     prompt: string,
     onChunk: (text: string) => void,
-    options: { temperature?: number; top_p?: number; rawOptions?: any } = {}
+    options: { temperature?: number; top_p?: number; format?: string; rawOptions?: any } = {}
   ): Promise<void> {
     const url = `${env.OLLAMA_BASE_URL}/api/generate`;
 
-    const response = await this.fetchWithTimeout(url, {
+    const { format, rawOptions, ...restOptions } = options;
+    const formatValue = format || (rawOptions && rawOptions.format) || undefined;
+    const cleanRaw = { ...rawOptions };
+    if (cleanRaw.format) delete cleanRaw.format;
+
+    const response = await this.fetchWithCircuitBreaker(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         model: env.OLLAMA_MODEL,
         prompt,
         stream: true,
+        format: formatValue,
         options: {
-          temperature: options.temperature ?? 0.3,
-          top_p: options.top_p ?? 0.9,
-          ...options.rawOptions,
+          temperature: restOptions.temperature ?? 0.3,
+          top_p: restOptions.top_p ?? 0.9,
+          ...cleanRaw,
         },
       }),
     });

@@ -1,4 +1,7 @@
 import { prisma } from "../../prisma/index.js";
+import { mapPropertyToDTO } from "../properties/property.mapper.js";
+
+const STRICT_AIBOT_PROPERTY_SELECT = { title: true, price: true, city: true, state: true, location: { select: { name: true, city: { select: { name: true, state: { select: { name: true } } } } } } };
 
 /**
  * Calculates analytics KPIs, funnel, and trends for the AI Bot dashboard.
@@ -56,16 +59,19 @@ export async function getAiBotSummary() {
   ];
 
   // Top locations searched (from properties address/city linked to leads or available properties)
-  const locationsGroup = await prisma.property.groupBy({
-    by: ["city"],
-    _count: { id: true },
-    orderBy: { _count: { id: "desc" } },
-    take: 5,
-  });
+  const locationsGroup: { city: string; count: bigint }[] = await prisma.$queryRaw`
+    SELECT c.name as "city", COUNT(p.id) as "count"
+    FROM "Property" p
+    JOIN "Area" a ON p."locationId" = a.id
+    JOIN "City" c ON a."cityId" = c.id
+    GROUP BY c.name
+    ORDER BY "count" DESC
+    LIMIT 5;
+  `;
 
   const topLocations = locationsGroup.map((l) => ({
     name: l.city,
-    value: l._count.id,
+    value: Number(l.count),
   }));
 
   // Top property types
@@ -140,26 +146,28 @@ export async function getActiveSessions() {
  * Returns leads generated specifically via the AI Bot.
  */
 export async function getBotLeads() {
-  return prisma.lead.findMany({
+  const leads = await prisma.lead.findMany({
     where: { source: "WhatsApp AI Bot" },
     include: {
       customer: { select: { name: true, phone: true, email: true } },
-      property: { select: { title: true, price: true, city: true } },
+      property: { select: STRICT_AIBOT_PROPERTY_SELECT },
     },
     orderBy: { createdAt: "desc" },
   });
+  return leads.map(l => ({ ...l, property: mapPropertyToDTO(l.property) }));
 }
 
 /**
  * Returns site visits scheduled by the bot.
  */
 export async function getBotSiteVisits() {
-  return prisma.appointment.findMany({
+  const visits = await prisma.appointment.findMany({
     where: { notes: { contains: "WhatsApp" } },
     include: {
       customer: { select: { name: true, phone: true } },
-      property: { select: { title: true, address: true, city: true } },
+      property: { select: { ...STRICT_AIBOT_PROPERTY_SELECT, address: true } as any },
     },
     orderBy: { scheduledAt: "desc" },
   });
+  return visits.map(v => ({ ...v, property: mapPropertyToDTO(v.property) }));
 }

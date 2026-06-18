@@ -17,9 +17,14 @@ export function errorHandler(err: unknown, req: Request, res: Response, next: Ne
       return res.status(404).json(createErrorResponse("Record not found.", 404));
     }
     // Foreign key constraint violation
-    if (err.code === "P2003") {
-      return res.status(400).json(createErrorResponse("Related record does not exist.", 400));
+    if (err.code === "P2003" || (err.message && err.message.includes("violates RESTRICT setting"))) {
+      return res.status(409).json(createErrorResponse("Cannot delete because related records exist.", 409));
     }
+  }
+
+  // Handle Unknown Request Errors for Postgres 23001 RESTRICT
+  if (err instanceof Prisma.PrismaClientUnknownRequestError && err.message && err.message.includes("violates RESTRICT setting")) {
+    return res.status(409).json(createErrorResponse("Cannot delete because related records exist.", 409));
   }
 
   // Prisma validation error

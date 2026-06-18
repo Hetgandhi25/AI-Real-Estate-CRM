@@ -64,154 +64,151 @@ export async function runOpenClawAgent(params: {
 
   const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
 
-  // Wrap inside acquireLock to serialize operations for the same phone number
-  return tools.acquireLock(cleanPhone, async () => {
-    // 1. Fetch conversation history from SQL
-    let customer = await prisma.customer.findFirst({
-      where: { phone: { endsWith: last10 } },
-      include: { conversations: true },
-    });
-
-    let history: { role: string; content: string }[] = [];
-
-    if (customer && customer.conversations.length > 0) {
-      const conv = customer.conversations[0];
-      try {
-        const msgs = JSON.parse(conv.messages);
-        if (Array.isArray(msgs)) {
-          // Load last 10 messages
-          history = msgs.slice(-10).map((m: any) => ({
-            role: m.from === "customer" ? "user" : "assistant",
-            content: m.text,
-          }));
-        }
-      } catch (e) {
-        console.error("[Agent] Error parsing history messages", e);
-      }
-    }
-
-    // Append current user message
-    history.push({ role: "user", content: truncatedMessage });
-
-    let chatMessages = [
-      { role: "system", content: SYSTEM_PROMPT },
-      ...history,
-    ];
-
-    let loopCount = 0;
-    let finalResponse = "";
-
-    while (loopCount < 3) {
-      loopCount++;
-      console.log(`[Agent] Calling Ollama (Loop ${loopCount})`);
-      
-      let modelReply = "";
-      try {
-        const response = await OllamaService.chat(chatMessages, {
-          temperature: 0.2,
-          rawOptions: {
-            format: "json", // Instruct Ollama to force JSON output
-          },
-        });
-        modelReply = response.message.content.trim();
-      } catch (err: any) {
-        console.error("[Agent] Ollama connection failed", err.message);
-        // Fallback with DB search capability
-        finalResponse = await getFallbackResponse(truncatedMessage);
-        break;
-      }
-
-      console.log(`[Agent] Model Reply: ${modelReply}`);
-
-      // Parse the JSON reply
-      let parsed: any = null;
-      let cleanReply = modelReply.trim();
-      if (cleanReply.startsWith("```")) {
-        // Strip markdown code blocks
-        cleanReply = cleanReply.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
-      }
-
-      try {
-        parsed = JSON.parse(cleanReply);
-      } catch (e) {
-        // If parsing fails, try to extract JSON block using regex
-        const match = cleanReply.match(/\{[\s\S]*\}/);
-        if (match) {
-          try {
-            parsed = JSON.parse(match[0]);
-          } catch (innerErr) {
-            console.error("[Agent] Regex JSON parse error");
-          }
-        }
-      }
-
-      // If still not parsed, treat it as a conversational message fallback
-      if (!parsed) {
-        finalResponse = modelReply;
-        break;
-      }
-
-      // Check if it's a tool call
-      if (parsed.toolCall) {
-        const toolName = parsed.toolCall.name;
-        const toolArgs = parsed.toolCall.arguments || {};
-        console.log(`[Agent] Executing tool: ${toolName} with args:`, toolArgs);
-
-        let toolResult: any = null;
-        try {
-          if (toolName === "searchProperties") {
-            toolResult = await tools.searchProperties(toolArgs);
-          } else if (toolName === "getPropertyDetails") {
-            toolResult = await tools.getPropertyDetails(toolArgs);
-          } else if (toolName === "createLead") {
-            const args = { ...toolArgs, phone: toolArgs.phone || cleanPhone };
-            toolResult = await tools.createLead(args);
-          } else if (toolName === "scheduleSiteVisit") {
-            const args = { ...toolArgs, phone: toolArgs.phone || cleanPhone };
-            toolResult = await tools.scheduleSiteVisit(args);
-          } else {
-            toolResult = `Tool ${toolName} not found.`;
-          }
-        } catch (err: any) {
-          console.error(`[Agent] Tool ${toolName} execution error:`, err.message);
-          toolResult = `Error executing tool: ${err.message}`;
-        }
-
-        console.log(`[Agent] Tool Result:`, JSON.stringify(toolResult));
-
-        // Append assistant's tool-call response and the tool output to history
-        chatMessages.push({ role: "assistant", content: modelReply });
-        chatMessages.push({
-          role: "user",
-          content: `TOOL_RESULT [${toolName}]: ${JSON.stringify(toolResult)}`,
-        });
-      } else {
-        // No tool call, we have a final response
-        finalResponse = parsed.response || parsed.text || modelReply;
-        break;
-      }
-    }
-
-    if (!finalResponse) {
-      finalResponse = "Thank you for reaching out! Let me check that and connect you with an agent.";
-    }
-
-    // 2. Save the dialogue to SQL database via saveConversation tool
-    try {
-      await tools.saveConversation({
-        phone: cleanPhone,
-        pushName,
-        messages: [
-          { from: "customer", text: truncatedMessage, timestamp: new Date().toISOString() },
-          { from: "agent", text: finalResponse, timestamp: new Date().toISOString() },
-        ],
-      });
-    } catch (dbErr) {
-      console.error("[Agent] Failed to persist conversation to PostgreSQL database", dbErr);
-    }
-
-    return finalResponse;
+  // 1. Fetch conversation history from SQL
+  let customer = await prisma.customer.findFirst({
+    where: { phone: { endsWith: last10 } },
+    include: { conversations: true },
   });
+
+  let history: { role: string; content: string }[] = [];
+
+  if (customer && customer.conversations.length > 0) {
+    const conv = customer.conversations[0];
+    try {
+      const msgs = JSON.parse(conv.messages);
+      if (Array.isArray(msgs)) {
+        // Load last 10 messages
+        history = msgs.slice(-10).map((m: any) => ({
+          role: m.from === "customer" ? "user" : "assistant",
+          content: m.text,
+        }));
+      }
+    } catch (e) {
+      console.error("[Agent] Error parsing history messages", e);
+    }
+  }
+
+  // Append current user message
+  history.push({ role: "user", content: truncatedMessage });
+
+  let chatMessages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...history,
+  ];
+
+  let loopCount = 0;
+  let finalResponse = "";
+
+  while (loopCount < 3) {
+    loopCount++;
+    console.log(`[Agent] Calling Ollama (Loop ${loopCount})`);
+    
+    let modelReply = "";
+    try {
+      const response = await OllamaService.chat(chatMessages, {
+        temperature: 0.2,
+        rawOptions: {
+          format: "json", // Instruct Ollama to force JSON output
+        },
+      });
+      modelReply = response.message.content.trim();
+    } catch (err: any) {
+      console.error("[Agent] Ollama connection failed", err.message);
+      // Fallback with DB search capability
+      finalResponse = await getFallbackResponse(truncatedMessage);
+      break;
+    }
+
+    console.log(`[Agent] Model Reply: ${modelReply}`);
+
+    // Parse the JSON reply
+    let parsed: any = null;
+    let cleanReply = modelReply.trim();
+    if (cleanReply.startsWith("```")) {
+      // Strip markdown code blocks
+      cleanReply = cleanReply.replace(/^```(?:json)?\n?/i, "").replace(/\n?```$/i, "").trim();
+    }
+
+    try {
+      parsed = JSON.parse(cleanReply);
+    } catch (e) {
+      // If parsing fails, try to extract JSON block using regex
+      const match = cleanReply.match(/\{[\s\S]*\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch (innerErr) {
+          console.error("[Agent] Regex JSON parse error");
+        }
+      }
+    }
+
+    // If still not parsed, treat it as a conversational message fallback
+    if (!parsed) {
+      finalResponse = modelReply;
+      break;
+    }
+
+    // Check if it's a tool call
+    if (parsed.toolCall) {
+      const toolName = parsed.toolCall.name;
+      const toolArgs = parsed.toolCall.arguments || {};
+      console.log(`[Agent] Executing tool: ${toolName} with args:`, toolArgs);
+
+      let toolResult: any = null;
+      try {
+        if (toolName === "searchProperties") {
+          toolResult = await tools.searchProperties(toolArgs);
+        } else if (toolName === "getPropertyDetails") {
+          toolResult = await tools.getPropertyDetails(toolArgs);
+        } else if (toolName === "createLead") {
+          const args = { ...toolArgs, phone: toolArgs.phone || cleanPhone };
+          toolResult = await tools.createLead(args);
+        } else if (toolName === "scheduleSiteVisit") {
+          const args = { ...toolArgs, phone: toolArgs.phone || cleanPhone };
+          toolResult = await tools.scheduleSiteVisit(args);
+        } else {
+          toolResult = `Tool ${toolName} not found.`;
+        }
+      } catch (err: any) {
+        console.error(`[Agent] Tool ${toolName} execution error:`, err.message);
+        toolResult = `Error executing tool: ${err.message}`;
+      }
+
+      console.log(`[Agent] Tool Result:`, JSON.stringify(toolResult));
+
+      // Append assistant's tool-call response and the tool output to history
+      chatMessages.push({ role: "assistant", content: modelReply });
+      chatMessages.push({
+        role: "user",
+        content: `TOOL_RESULT [${toolName}]: ${JSON.stringify(toolResult)}`,
+      });
+    } else {
+      // No tool call, we have a final response
+      finalResponse = parsed.response || parsed.text || modelReply;
+      break;
+    }
+  }
+
+  if (!finalResponse) {
+    finalResponse = "Thank you for reaching out! Let me check that and connect you with an agent.";
+  }
+
+  // 2. Save the dialogue to SQL database via saveConversation tool
+  try {
+    await tools.saveConversation({
+      phone: cleanPhone,
+      pushName,
+      messages: [
+        { from: "customer", text: truncatedMessage, timestamp: new Date().toISOString() },
+        { from: "agent", text: finalResponse, timestamp: new Date().toISOString() },
+      ],
+    });
+  } catch (dbErr) {
+    console.error("[Agent] Failed to persist conversation to PostgreSQL database", dbErr);
+  }
+
+  return finalResponse;
 }
 
 async function getFallbackResponse(userMessage: string): Promise<string> {

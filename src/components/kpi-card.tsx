@@ -4,6 +4,8 @@ import { RadialBarChart, RadialBar, ResponsiveContainer, PolarAngleAxis } from "
 import { ClientOnly } from "@/components/common/client-only";
 import { formatCurrency, formatNumber } from "@/lib/formatters";
 
+import { cn } from "@/lib/utils";
+
 type KpiCardProps = {
   label: string;
   value: number | string;
@@ -11,9 +13,11 @@ type KpiCardProps = {
   color: string;
   icon: LucideIcon;
   prefix?: string;
+  onClick?: () => void;
+  className?: string;
 };
 
-function KpiCardComponent({ label, value, change, color, icon: Icon, prefix }: KpiCardProps) {
+function KpiCardComponent({ label, value, change, color, icon: Icon, prefix, onClick, className }: KpiCardProps) {
   const pct = Math.min(Math.abs(change) * 4 + 30, 95);
   const data = [{ name: "v", value: pct, fill: color }];
   const positive = change >= 0;
@@ -26,7 +30,13 @@ function KpiCardComponent({ label, value, change, color, icon: Icon, prefix }: K
       : `${prefix ?? ""}${value}`;
 
   return (
-    <div className="glass-card rounded-2xl p-5 hover:-translate-y-0.5 hover:border-primary/40 transition-all duration-300 group">
+    <div
+      onClick={onClick}
+      className={cn(
+        "glass-card rounded-2xl p-5 hover:-translate-y-0.5 hover:border-primary/40 transition-all duration-300 group",
+        className
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-muted-foreground text-sm">

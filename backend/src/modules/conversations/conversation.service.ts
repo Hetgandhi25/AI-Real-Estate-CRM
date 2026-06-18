@@ -11,14 +11,53 @@ type ConversationPayload = {
 
 type ConversationUpdatePayload = Partial<ConversationPayload>;
 
-function parseConversation(conversation: any) {
+async function resolveMessagesPhaseA(conversation: any) {
   if (!conversation) return conversation;
+  
+  let resolvedMessages: ConversationMessage[] = [];
+  
+  // 1. Try reading from messagesList (SQL table)
+  if (conversation.messagesList && conversation.messagesList.length > 0) {
+    resolvedMessages = conversation.messagesList.map((m: any) => ({
+      from: m.from,
+      text: m.text,
+      timestamp: m.timestamp.toISOString()
+    })).sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  } else {
+    // 2. Fallback to Conversation.messages JSON
+    try {
+      resolvedMessages = typeof conversation.messages === "string" 
+        ? JSON.parse(conversation.messages) 
+        : conversation.messages;
+    } catch (e) {
+      resolvedMessages = [];
+    }
+    
+    if (!Array.isArray(resolvedMessages)) resolvedMessages = [];
+    
+    // 3. Self-heal missing Message rows
+    if (resolvedMessages.length > 0) {
+      try {
+        const createData = resolvedMessages.map((m) => ({
+          conversationId: conversation.id,
+          from: m.from,
+          text: m.text,
+          timestamp: m.timestamp ? new Date(m.timestamp) : new Date()
+        }));
+        await prisma.message.createMany({
+          data: createData,
+          skipDuplicates: true
+        });
+      } catch (err) {
+        console.error("[Conversation Service] Self-heal failed", err);
+      }
+    }
+  }
+
   return {
     ...conversation,
-    messages:
-      typeof conversation.messages === "string"
-        ? JSON.parse(conversation.messages)
-        : conversation.messages,
+    messages: resolvedMessages,
+    messagesList: undefined
   };
 }
 
@@ -68,18 +107,24 @@ export async function listConversations(params?: { search?: string }) {
 
   const conversations = await prisma.conversation.findMany({
     where,
-    include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
+    include: { 
+      customer: { select: { id: true, name: true, email: true, phone: true } },
+      messagesList: true 
+    },
     orderBy: { updatedAt: "desc" },
   });
-  return conversations.map(parseConversation);
+  return Promise.all(conversations.map(resolveMessagesPhaseA));
 }
 
 export async function getConversationById(id: string) {
   const conversation = await prisma.conversation.findUnique({
     where: { id },
-    include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
+    include: { 
+      customer: { select: { id: true, name: true, email: true, phone: true } },
+      messagesList: true
+    },
   });
-  return parseConversation(conversation);
+  return resolveMessagesPhaseA(conversation);
 }
 
 export async function createConversation(payload: ConversationPayload) {
@@ -119,7 +164,7 @@ export async function createConversation(payload: ConversationPayload) {
     }
   }
 
-  return parseConversation(conversation);
+  return resolveMessagesPhaseA(conversation);
 }
 
 export async function updateConversation(id: string, payload: ConversationUpdatePayload) {
@@ -142,7 +187,7 @@ export async function updateConversation(id: string, payload: ConversationUpdate
     include: { customer: { select: { id: true, name: true, email: true, phone: true } } },
   });
 
-  return parseConversation(updated);
+  return resolveMessagesPhaseA(updated);
 }
 
 export async function addMessageToConversation(
@@ -150,21 +195,20 @@ export async function addMessageToConversation(
   message: ConversationMessage,
   withAiResponse: boolean
 ) {
-  const { acquireLock } = await import("../whatsapp/openclaw.tools.js");
-
-  return acquireLock(id, async () => {
+  {
     const conversation = await prisma.conversation.findUnique({
       where: { id },
-      include: { customer: { select: { id: true, name: true, phone: true } } },
+      include: { 
+        customer: { select: { id: true, name: true, phone: true } },
+        messagesList: true
+      },
     });
     if (!conversation) {
       throw new ApiError(404, "Conversation not found");
     }
 
-    const existing: ConversationMessage[] =
-      typeof conversation.messages === "string"
-        ? JSON.parse(conversation.messages)
-        : (conversation.messages as ConversationMessage[]);
+    const resolvedConversation = await resolveMessagesPhaseA(conversation);
+    const existing: ConversationMessage[] = resolvedConversation.messages;
 
     const newMessage = { ...message, timestamp: new Date().toISOString() };
     const updatedMessages = [...existing, newMessage];
@@ -230,8 +274,8 @@ export async function addMessageToConversation(
       console.error("[Socket.IO Broadcast Error]", socketError);
     }
 
-    return parseConversation(updated);
-  });
+    return resolveMessagesPhaseA(updated);
+  }
 }
 
 export async function deleteConversation(id: string) {

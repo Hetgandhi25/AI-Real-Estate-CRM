@@ -8,12 +8,13 @@ import {
   revenueData,
   topAgents,
   conversions,
+  revenueBreakdown,
 } from "@/lib/mock-data";
 import type { DashboardSummary, AnalyticsSummary } from "@/types";
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {
   if (env.VITE_MOCK_AUTH) {
-    return { kpis, revenueData, referrals, customerGrowth, propertyTypes, topAgents, conversions };
+    return { kpis, revenueData, referrals, customerGrowth, propertyTypes, topAgents, conversions, revenueBreakdown };
   }
   return apiGet<DashboardSummary>(API_ENDPOINTS.dashboard.summary);
 }

@@ -8,8 +8,11 @@ type ListParams = {
   location?: string;
 };
 
+import { normalizePhone } from "../../common/lib/phone.utils.js";
+
 export async function createCustomer(payload: { name: string; phone: string; email: string; budget?: number; preferredLocation?: string; notes?: string }) {
-  return prisma.customer.create({ data: payload as any });
+  const normalizedPhone = normalizePhone(payload.phone);
+  return prisma.customer.create({ data: { ...payload, phone: normalizedPhone } as any });
 }
 
 export async function listCustomers(params: ListParams) {
@@ -50,7 +53,11 @@ export async function getCustomerById(id: string) {
 }
 
 export async function updateCustomer(id: string, payload: Partial<{ name: string; phone: string; email: string; budget?: number; preferredLocation?: string; notes?: string }>) {
-  return prisma.customer.update({ where: { id }, data: payload as any });
+  const data = { ...payload };
+  if (data.phone) {
+    data.phone = normalizePhone(data.phone);
+  }
+  return prisma.customer.update({ where: { id }, data: data as any });
 }
 
 export async function deleteCustomer(id: string) {

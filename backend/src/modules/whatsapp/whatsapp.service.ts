@@ -1,16 +1,9 @@
-import makeWASocket, {
-  useMultiFileAuthState,
-  DisconnectReason,
-  WASocket,
-} from "@whiskeysockets/baileys";
-// @ts-ignore
-import qrcode from "qrcode-terminal";
 import { env } from "../../config/env.js";
 import { broadcastConversationUpdate } from "../../socket.js";
 import { runOpenClawAgent } from "./openclaw.agent.js";
 import { prisma } from "../../prisma/index.js";
+import { normalizePhone } from "../../common/lib/phone.utils.js";
 
-let sock: WASocket | null = null;
 const processedMessages = new Set<string>();
 
 const whatsappLimiterMap = new Map<string, { count: number; resetTime: number }>();
@@ -44,148 +37,131 @@ function checkWhatsAppRateLimit(phone: string): boolean {
 }
 
 /**
- * Starts the Baileys WhatsApp Socket client and handles events.
+ * Sends an outbound WhatsApp message via Meta Cloud API.
+ * Returns the wamid (Meta Message ID) if successful.
  */
-export async function startWhatsApp() {
-  console.log(`[WhatsApp Service] Initializing Baileys auth in folder: ${env.WHATSAPP_SESSION_DIR}`);
-  
-  const { state, saveCreds } = await useMultiFileAuthState(env.WHATSAPP_SESSION_DIR);
-
-  sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: false,
-  });
-
-  sock.ev.on("creds.update", saveCreds);
-
-  // Connection Updates
-  sock.ev.on("connection.update", async (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      console.log("\n📷 SCAN THIS QR CODE ON WHATSAPP TO LINK:");
-      qrcode.generate(qr, { small: true });
-    }
-
-    if (connection === "open") {
-      console.log("✅ WhatsApp successfully connected and ready!");
-    }
-
-    if (connection === "close") {
-      const shouldReconnect =
-        (lastDisconnect?.error as any)?.output?.statusCode !== DisconnectReason.loggedOut;
-
-      console.log(`⚠️ WhatsApp connection closed. Reconnecting: ${shouldReconnect}`);
-      if (shouldReconnect) {
-        startWhatsApp();
-      }
-    }
-  });
-
-  // Message Events
-  sock.ev.on("messages.upsert", async ({ messages, type }) => {
-    if (type !== "notify") return;
-
-    const msg = messages[0];
-    if (!msg || !msg.message) return;
-
-    const sender = msg.key.remoteJid;
-    if (!sender) return;
-
-    // Deduplicate messages
-    const messageId = msg.key.id;
-    if (!messageId || processedMessages.has(messageId)) return;
-    processedMessages.add(messageId);
-    setTimeout(() => processedMessages.delete(messageId), 60000);
-
-    // Skip self-sent messages
-    if (msg.key.fromMe) return;
-
-    // Extract text content
-    let messageContent: any = msg.message;
-    if (messageContent?.ephemeralMessage) {
-      messageContent = messageContent.ephemeralMessage.message;
-    }
-    if (messageContent?.viewOnceMessage) {
-      messageContent = messageContent.viewOnceMessage.message;
-    }
-
-    let text =
-      messageContent?.conversation ||
-      messageContent?.extendedTextMessage?.text ||
-      messageContent?.imageMessage?.caption ||
-      messageContent?.videoMessage?.caption ||
-      "";
-
-    text = text.trim();
-    if (!text) return;
-
-    // Truncate incoming text to 1000 characters to prevent buffer bloating DoS
-    if (text.length > 1000) {
-      text = text.substring(0, 1000) + "... [truncated]";
-    }
-
-    const phone = sender.split("@")[0];
+export async function sendWhatsAppMessage(phone: string, text: string): Promise<{ success: boolean; wamid?: string; error?: string }> {
+  try {
+    const cleanPhone = normalizePhone(phone);
     
-    // Check WhatsApp rate limiting to prevent spamming DoS attacks
-    if (!checkWhatsAppRateLimit(phone)) {
-      console.warn(`[WhatsApp Service] Rate limit exceeded for ${phone}. Ignoring message.`);
-      return;
+    console.log(`[WhatsApp Service] Sending outbound message to ${cleanPhone}`);
+    
+    const url = `https://graph.facebook.com/v19.0/${env.META_WA_PHONE_NUMBER_ID}/messages`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${env.META_WA_ACCESS_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        messaging_product: "whatsapp",
+        recipient_type: "individual",
+        to: cleanPhone,
+        type: "text",
+        text: { preview_url: false, body: text },
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error("[WhatsApp Service] Failed to send outbound WhatsApp message:", response.status, errorData);
+      return { success: false, error: errorData };
     }
 
-    console.log(`💬 Incoming WhatsApp message from ${sender}: "${text}"`);
+    const responseData: any = await response.json();
+    const wamid = responseData.messages?.[0]?.id;
 
-    const pushName = msg.pushName || undefined;
-
-    try {
-      // Execute the OpenClaw agent runtime
-      const reply = await runOpenClawAgent({
-        phone,
-        pushName,
-        userMessage: text,
-      });
-
-      // Send the response back via WhatsApp
-      await sock!.sendMessage(sender, { text: reply });
-      console.log(`📤 Sent WhatsApp reply to ${sender}: "${reply}"`);
-
-      // Trigger socket broadcast to update the CRM frontend dashboard in real-time
-      const cleanPhone = phone.replace(/[^0-9]/g, "");
-      const last10 = cleanPhone.length >= 10 ? cleanPhone.slice(-10) : cleanPhone;
-      const customer = await prisma.customer.findFirst({
-        where: { phone: { endsWith: last10 } },
-        include: { conversations: true },
-      });
-
-      if (customer && customer.conversations.length > 0) {
-        broadcastConversationUpdate(customer.conversations[0].id, customer.id);
-      }
-    } catch (err: any) {
-      console.error("[WhatsApp Service Error]", err);
-      const errMsg = "⚠️ *Server Error*\n\nUnable to process your request right now. Please try again in a moment.";
-      await sock!.sendMessage(sender, { text: errMsg });
-    }
-  });
+    return { success: true, wamid };
+  } catch (error: any) {
+    console.error("[WhatsApp Service] Exception sending outbound WhatsApp message:", error);
+    return { success: false, error: error.message };
+  }
 }
 
 /**
- * Public method to send outbound messages from CRM UI.
+ * Handles incoming WhatsApp messages from Meta Webhook payload.
  */
-export async function sendWhatsAppMessage(phone: string, text: string): Promise<boolean> {
-  if (!sock) {
-    console.error("[WhatsApp Service] Cannot send outbound WhatsApp message: Baileys socket is not connected!");
-    return false;
-  }
-
+export async function handleIncomingMessage(body: any) {
   try {
-    const cleanPhone = phone.replace(/[^0-9]/g, "");
-    const jid = cleanPhone.includes("@s.whatsapp.net") ? cleanPhone : `${cleanPhone}@s.whatsapp.net`;
-    
-    console.log(`[WhatsApp Service] Sending outbound message to ${jid}`);
-    await sock.sendMessage(jid, { text });
-    return true;
+    if (body.object !== "whatsapp_business_account") return;
+
+    for (const entry of body.entry) {
+      for (const change of entry.changes) {
+        const value = change.value;
+        if (value && value.messages && value.messages[0]) {
+          const msg = value.messages[0];
+          const contact = value.contacts && value.contacts[0] ? value.contacts[0] : null;
+
+          const sender = msg.from; // Phone number without '+'
+          const messageId = msg.id;
+
+          if (!sender || !messageId) continue;
+
+          // Deduplicate messages
+          if (processedMessages.has(messageId)) continue;
+          processedMessages.add(messageId);
+          setTimeout(() => processedMessages.delete(messageId), 60000);
+
+          let text = "";
+          if (msg.type === "text") {
+            text = msg.text.body;
+          } else if (msg.type === "button") {
+            text = msg.button.text;
+          } else if (msg.type === "interactive") {
+            text = msg.interactive.button_reply?.title || msg.interactive.list_reply?.title || "";
+          }
+
+          text = text.trim();
+          if (!text) continue;
+
+          // Truncate incoming text to 1000 characters to prevent buffer bloating DoS
+          if (text.length > 1000) {
+            text = text.substring(0, 1000) + "... [truncated]";
+          }
+
+          const phone = sender;
+          
+          // Check WhatsApp rate limiting to prevent spamming DoS attacks
+          if (!checkWhatsAppRateLimit(phone)) {
+            console.warn(`[WhatsApp Service] Rate limit exceeded for ${phone}. Ignoring message.`);
+            continue;
+          }
+
+          console.log(`💬 Incoming WhatsApp message from ${sender}: "${text}"`);
+
+          const pushName = contact?.profile?.name || undefined;
+
+          try {
+            // Execute the OpenClaw agent runtime
+            const reply = await runOpenClawAgent({
+              phone,
+              pushName,
+              userMessage: text,
+            });
+
+            // Send the response back via WhatsApp
+            await sendWhatsAppMessage(phone, reply);
+            console.log(`📤 Sent WhatsApp reply to ${sender}: "${reply}"`);
+
+            // Trigger socket broadcast to update the CRM frontend dashboard in real-time
+            const normalizedPhone = normalizePhone(phone);
+            const customer = await prisma.customer.findFirst({
+              where: { phone: normalizedPhone },
+              include: { conversations: true },
+            });
+
+            if (customer && customer.conversations.length > 0) {
+              broadcastConversationUpdate(customer.conversations[0].id, customer.id);
+            }
+          } catch (err: any) {
+            console.error("[WhatsApp Service Error]", err);
+            const errMsg = "⚠️ *Server Error*\n\nUnable to process your request right now. Please try again in a moment.";
+            await sendWhatsAppMessage(phone, errMsg);
+          }
+        }
+      }
+    }
   } catch (error) {
-    console.error("[WhatsApp Service] Failed to send outbound WhatsApp message:", error);
-    return false;
+    console.error("[WhatsApp Service] Error processing incoming webhook:", error);
   }
 }

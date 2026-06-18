@@ -1,4 +1,7 @@
 import { prisma } from "../../prisma/index.js";
+import { mapPropertyToDTO } from "../properties/property.mapper.js";
+
+const STRICT_LEAD_PROPERTY_SELECT = { id: true, title: true, city: true, status: true, state: true, location: { select: { name: true, city: { select: { name: true, state: { select: { name: true } } } } } } };
 
 type ListParams = {
   page: number;
@@ -31,11 +34,11 @@ export async function createLead(payload: {
     data: payload as any,
     include: {
       customer: { select: { id: true, name: true, email: true } },
-      property: { select: { id: true, title: true, city: true, status: true } },
+      property: { select: STRICT_LEAD_PROPERTY_SELECT },
       assignedAgent: { select: { id: true, name: true, email: true } },
     },
   });
-  return lead;
+  return { ...lead, property: mapPropertyToDTO(lead.property) };
 }
 
 export async function updateLead(
@@ -47,10 +50,10 @@ export async function updateLead(
     data: payload as any,
     include: {
       customer: { select: { id: true, name: true, email: true } },
-      property: { select: { id: true, title: true, city: true, status: true } },
+      property: { select: STRICT_LEAD_PROPERTY_SELECT },
       assignedAgent: { select: { id: true, name: true, email: true } },
     },
-  });
+  }).then(lead => ({ ...lead, property: mapPropertyToDTO(lead.property) }));
 }
 
 export async function deleteLead(id: string) {
@@ -62,10 +65,10 @@ export async function getLeadById(id: string) {
     where: { id },
     include: {
       customer: { select: { id: true, name: true, email: true } },
-      property: { select: { id: true, title: true, city: true, status: true } },
+      property: { select: STRICT_LEAD_PROPERTY_SELECT },
       assignedAgent: { select: { id: true, name: true, email: true } },
     },
-  });
+  }).then(lead => lead ? { ...lead, property: mapPropertyToDTO(lead.property) } : null);
 }
 
 export async function listLeads(params: ListParams) {
@@ -93,7 +96,7 @@ export async function listLeads(params: ListParams) {
         property: {
           OR: [
             { title: { contains: search, mode: "insensitive" } },
-            { city: { contains: search, mode: "insensitive" } },
+            { location: { city: { name: { contains: search, mode: "insensitive" } } } },
           ],
         },
       },
@@ -113,13 +116,13 @@ export async function listLeads(params: ListParams) {
     orderBy: { createdAt: "desc" },
     include: {
       customer: { select: { id: true, name: true, email: true } },
-      property: { select: { id: true, title: true, city: true, status: true } },
+      property: { select: STRICT_LEAD_PROPERTY_SELECT },
       assignedAgent: { select: { id: true, name: true, email: true } },
     },
   });
 
   return {
-    data: items,
+    data: items.map(lead => ({ ...lead, property: mapPropertyToDTO(lead.property) })),
     meta: {
       page,
       pageSize,

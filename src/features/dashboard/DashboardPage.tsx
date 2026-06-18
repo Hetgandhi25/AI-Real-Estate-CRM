@@ -1,5 +1,12 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid,
   Cell, Legend, Pie, PieChart, Tooltip, XAxis, YAxis,
@@ -35,6 +42,7 @@ const tickFormatterK = (v: number) => `${v}k`;
 function Dashboard() {
   const { data, isLoading } = useDashboardSummary();
   const { displayName } = useSession();
+  const [showRevenueModal, setShowRevenueModal] = useState(false);
   const dashboard = data ?? {
     kpis: [],
     revenueData: [],
@@ -94,10 +102,63 @@ function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {dashboard.kpis.map((k) => (
-          <KpiCard key={k.label} {...k} icon={iconMap[k.icon] ?? Home} />
-        ))}
+        {dashboard.kpis.map((k) => {
+          const isRevenue = k.label === "Revenue (Mo)";
+          return (
+            <KpiCard
+              key={k.label}
+              {...k}
+              icon={iconMap[k.icon] ?? Home}
+              onClick={isRevenue ? () => setShowRevenueModal(true) : undefined}
+              className={isRevenue ? "cursor-pointer active:scale-[0.98] transition-transform hover:shadow-lg" : undefined}
+            />
+          );
+        })}
       </div>
+
+      <Dialog open={showRevenueModal} onOpenChange={setShowRevenueModal}>
+        <DialogContent className="max-w-md bg-card/95 border-border backdrop-blur-xl text-foreground">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2">
+              <DollarSign className="size-5 text-[color:var(--chart-2)]" />
+              Monthly Revenue Breakdown
+            </DialogTitle>
+            <DialogDescription className="text-muted-foreground text-sm">
+              Attributed income details across properties for the current month.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mt-4 space-y-3 max-h-[350px] overflow-y-auto pr-1">
+            {dashboard.revenueBreakdown && dashboard.revenueBreakdown.length > 0 ? (
+              dashboard.revenueBreakdown.map((item) => (
+                <div 
+                  key={item.propertyId} 
+                  className="flex items-center justify-between p-3.5 rounded-xl bg-accent/20 hover:bg-accent/40 border border-border/50 transition-colors"
+                >
+                  <div className="min-w-0 pr-3">
+                    <h4 className="font-semibold text-sm truncate">{item.title}</h4>
+                    <p className="text-xs text-muted-foreground truncate mt-0.5">{item.address}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-bold text-sm text-[color:var(--chart-2)]">
+                      {formatCurrency(item.income)}
+                    </span>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-muted-foreground text-center py-4">No breakdown data available for this month.</p>
+            )}
+          </div>
+          <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-sm">
+            <span className="font-semibold text-muted-foreground">Total Income</span>
+            <span className="font-bold text-lg text-foreground">
+              {formatCurrency(
+                dashboard.revenueBreakdown?.reduce((sum, item) => sum + item.income, 0) || 0
+              )}
+            </span>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="glass-card rounded-2xl p-6 lg:col-span-2">
@@ -343,4 +404,3 @@ const TopAgentsPanel = memo(function TopAgentsPanel({ agents }: { agents: { name
 });
 
 export default Dashboard;
-

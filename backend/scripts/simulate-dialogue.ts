@@ -9,7 +9,7 @@ const PHONE = "919099090909";
 const JID = `${PHONE}@s.whatsapp.net`;
 const CLIENT_NAME = "Het Patel";
 
-// Mock Baileys sock sending
+// Mock Meta API sending
 async function mockSend(text: string) {
   console.log(`\n📲 [WhatsApp Received on Phone]:\n----------------------------------------\n${text}\n----------------------------------------`);
 }
