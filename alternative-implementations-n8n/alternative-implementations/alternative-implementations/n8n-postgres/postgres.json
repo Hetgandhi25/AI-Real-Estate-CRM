@@ -1,0 +1,668 @@
+{
+  "name": "postgres",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        -272
+      ],
+      "id": "65d81b27-cf72-4cc6-a23f-935133016d18",
+      "name": "Receive WhatsApp Message",
+      "webhookId": "adc41dd5-c746-4f3a-b1c7-a2ea08fc44f5",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "XSawdRScqElohdDp",
+          "name": "WhatsApp OAuth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $('Receive WhatsApp Message').item.json;\n\n// 1. Drop the event immediately if it's NOT a standard user text message\nif (!incoming.messages || !incoming.messages[0] || incoming.messages[0].type !== 'text') {\n    return []; // Empty array stops the workflow silently\n}\n\nconst msgId = incoming.messages[0].id;\nconst userPhone = incoming.contacts[0].wa_id;\n\n// $getWorkflowStaticData only works when the workflow is ACTIVE (Published).\n// It saves data across executions.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.processedIds) staticData.processedIds = {};\n\n// 2. Check if already processed (Meta Retry Prevention)\nconst key = `${userPhone}:${msgId}`;\nif (staticData.processedIds[key]) {\n  // Duplicate detected — stop execution silently to break the loop\n  return []; \n}\n\n// 3. Mark as processed\nstaticData.processedIds[key] = Date.now();\n\n// 4. Memory management (keep last 200 IDs to avoid unbounded growth)\nconst keys = Object.keys(staticData.processedIds);\nif (keys.length > 200) {\n  keys.sort((a, b) => staticData.processedIds[a] - staticData.processedIds[b]);\n  delete staticData.processedIds[keys[0]];\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        -272
+      ],
+      "id": "47020099-f362-46f5-a32f-a2813886650e",
+      "name": "Filter Webhooks & Prevent Duplicates"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0483a14b-92f6-4a23-a40a-57e41b012cff",
+              "name": "messages[0].text.body",
+              "value": "={{ $('Receive WhatsApp Message').item.json.messages[0].text.body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        -272
+      ],
+      "id": "db7cd535-d644-4d55-99c3-d8e78c17d2f4",
+      "name": "Extract Message Text"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1f78722f-34da-494d-8339-e4b27fc9e44a",
+              "leftValue": "={{\n\n[\n\n'hi',\n\n'hello',\n\n'hey',\n\n'hii',\n\n'helo',\n\n'good morning',\n\n'good afternoon',\n\n'good evening',\n\n'reset',\n\n'restart',\n'start'\n]\n.includes(\nString($json.messages[0].text.body || '')\n.toLowerCase()\n.trim()\n)\n}}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -48,
+        -272
+      ],
+      "id": "7d6e7b16-6a7d-46df-a98e-1d1b13b6a100",
+      "name": "Is it a Greeting or Reset?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a41bc69a-db83-4cac-9605-8ff486918974",
+              "leftValue": "={{ String($json.messages[0].text.body || '') .toLowerCase() .trim() === 'agent' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        144,
+        -128
+      ],
+      "id": "87323ef5-c3ac-4bb8-8d48-ac079bb168eb",
+      "name": "Did user ask for Agent?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const state = $input.first().json;\n\n// Define the flags exactly as the next node expects them\nconst hasLocation = !!state.location;\nconst hasType = !!state.property_type;\nconst hasPrice = !!state.max_price || !!state.min_price;\n\nconst readyToSearch = hasLocation && hasType;\n\nreturn [{\n  json: {\n    ...state,\n    readyToSearch,\n    hasLocation,\n    hasType,\n    hasPrice\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        736,
+        -16
+      ],
+      "id": "1e407728-7b6d-410a-af25-74bae9aa386e",
+      "name": "Check if Ready to Search"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1d6183ea-2ed5-4462-a412-b2185e674947",
+              "leftValue": "={{ $json.readyToSearch === true }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        944,
+        -16
+      ],
+      "id": "b6afa768-30aa-4cbf-be6f-17f863890410",
+      "name": "Are All Fields Provided?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8da15f5e-ce9b-4683-b81e-d5937e20b58c",
+              "leftValue": "={{ $input.all().length > 0 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1360,
+        -192
+      ],
+      "id": "5fe7d1e8-a7da-4fb5-8aaa-7aa2e5f23595",
+      "name": "Were Any Properties Found?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// The Postgres node outputs rows directly as n8n items\nconst rows = $input.all().map(item => item.json);\n\n// Build the WhatsApp message\nlet reply = `🏡 Here are some matching properties:\\n\\n`;\n\nfor (const row of rows) {\n  reply += `• ID: ${row.property_id || 'N/A'}\\n`;\n  \n  // Notice we use the exact column names returned by your SQL JOIN query\n  reply += `📍 ${row.location_name || ''}\\n`;\n  reply += `🏠 ${row.property_type || ''}\\n`;\n  reply += `💰 ${row.price || ''} Lakh\\n\\n`;\n}\n\nreply += `👨‍💼 Interested in any property?\\n\\nType: Agent\\n\\nOr contact:\\n📞 123456789`;\n\nreturn [{\n  json: {\n    reply: reply\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1584,
+        -368
+      ],
+      "id": "3add669b-5f39-4e90-bfb7-3875d476ac51",
+      "name": "Format Properties"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1760,
+        -368
+      ],
+      "id": "b498dcdf-d73a-4a9f-b1af-90fa5cef0fa6",
+      "name": "Send Property Matches",
+      "webhookId": "f020e7d7-a532-4271-a9df-6d44b68c0d76",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "=🏡 Welcome to XYZ Properties Ltd\nI’m your Property Assistant 👋\n\nWe can help you find:\n✅ Flats, Villas, Plots, Commercial Spaces\n\nPlease share these details in the below order:\n📍 Location\n🏠 Property Type\n💰 Budget\n\nExample: Flat in Ahmedabad under 80 lakh\n\n👨‍💼 Want direct assistance then Type: Agent\nOur property representative will assist you further.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        640,
+        -400
+      ],
+      "id": "0bab999e-e7fc-42be-b84f-10e0d42d96c3",
+      "name": "Send Menu",
+      "webhookId": "50eb05c3-131f-4c51-9203-29cf3e8d10ba",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "👨‍💼 Our property specialist will connect with you shortly.  \nFor immediate assistance, contact: 📞 123456789  \nPlease share your preferred: \n📍 Location \n🏠 Property Type \n💰 Budget",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        320,
+        -240
+      ],
+      "id": "d58c4488-34ee-462f-b476-bd0cdefb64a9",
+      "name": "Agent Handoff",
+      "webhookId": "d02374cb-7078-4d53-b723-ffb36e243792",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "={{\n(() => {\n  // Pulling the flags directly from the Code node so they aren't erased\n  const check = $('Check if Ready to Search').first().json;\n  let missing = [];\n\n  if (!check.hasLocation) {\n    missing.push('📍 Location');\n  }\n  if (!check.hasType) {\n    missing.push('🏠 Property Type');\n  }\n  if (!check.hasPrice) {\n    missing.push('💰 Budget (You can also say \"any budget\" or \"no limit\")');\n  }\n\n  return `Please share:\\n\\n${missing.join('\\n')}\\n\\nExample:\\nFlat in Ahmedabad under 80 lakh`;\n})()\n}}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1200,
+        112
+      ],
+      "id": "c32f04fb-c0f5-4a92-83fc-ef6833914f23",
+      "name": "Ask Missing Info",
+      "webhookId": "1756fad7-fdd4-43f7-9042-06725a7e4187",
+      "executeOnce": false,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "😔 No matching properties found.\n\nPlease start a new search by sharing:\n\n📍 Location\n🏠 Property Type\n💰 Budget\n\nExample:\nLand in Gota under 120 lakh\n\nYou can also type:\nHi\n\n👨‍💼 Need expert assistance?\nType: Agent",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        -64
+      ],
+      "id": "9970309a-122d-49cc-81f4-13eff051a5fa",
+      "name": "Send No Match",
+      "webhookId": "b640cf31-d16c-465e-9750-0e48c3a31b9e",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const message = $('Extract Message Text').item.json.messages[0].text.body.toLowerCase();\n\n// 1. Extract Type (Strictly matches your DB CHECK constraint)\nconst typeMatch = message.match(/(flat|bungalow|villa)/);\nlet type = typeMatch ? typeMatch[1] : null;\nif (type) {\n  // Capitalize first letter to match DB exactly ('Flat', 'Bungalow', 'Villa')\n  type = type.charAt(0).toUpperCase() + type.slice(1); \n}\n\n// 2. Extract Location (Add your specific Ahmedabad locations here)\nconst locations = ['gota', 'bopal', 'satellite', 'sg highway', 'thaltej', 'bodakdev', 'science city'];\nconst locMatch = locations.find(loc => message.includes(loc));\nconst location = locMatch || null;\n\n// 3. Extract Max Price (\"under 50\", \"below 60\", \"max 70\", \"less than 80\")\nconst maxMatch = message.match(/(?:under|below|max|less than)\\s*(\\d+)/);\nconst max_price = maxMatch ? Number(maxMatch[1]) : null;\n\n// 4. Extract Min Price (\"above 50\", \"over 60\", \"min 70\", \"50+\")\nconst minMatch = message.match(/(?:above|over|min|more than)\\s*(\\d+)|(\\d+)\\s*\\+/);\nconst min_price = minMatch ? Number(minMatch[1] || minMatch[2]) : null;\n\nreturn [{\n  json: {\n    customer_phone: $('Receive WhatsApp Message').item.json.contacts[0].wa_id,\n    type: type,\n    location: location,\n    max_price: max_price,\n    min_price: min_price\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        368,
+        -16
+      ],
+      "id": "d15d5376-43a5-4ded-abe7-a822aa5b089b",
+      "name": "Regex Extractor"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO conversation_state (customer_phone, property_type, location, min_price, max_price, last_updated) \nVALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)\nON CONFLICT (customer_phone) \nDO UPDATE SET \n    property_type = COALESCE(EXCLUDED.property_type, conversation_state.property_type),\n    location = COALESCE(EXCLUDED.location, conversation_state.location),\n    min_price = COALESCE(EXCLUDED.min_price, conversation_state.min_price),\n    max_price = COALESCE(EXCLUDED.max_price, conversation_state.max_price),\n    last_updated = CURRENT_TIMESTAMP\nRETURNING *;",
+        "options": {
+          "queryReplacement": "=[   \"{{ $json.customer_phone }}\",   \"{{ $json.type }}\",   \"{{ $json.location }}\",   \"{{ $json.min_price }}\",   \"{{ $json.max_price }}\" ]"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        544,
+        -16
+      ],
+      "id": "5c56c8cf-782b-45df-a3cd-a56f54705a08",
+      "name": "Execute a SQL query",
+      "credentials": {
+        "postgres": {
+          "id": "NlIwIIQC7enbvyEa",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    p.property_id, \n    p.property_type, \n    p.price, \n    p.address, \n    l.location_name\nFROM properties p\nJOIN locations l ON p.location_id = l.location_id\nWHERE p.available = TRUE\n  AND p.property_type = $1\n  AND l.location_name ILIKE '%' || $2 || '%'\n  AND ($3::numeric IS NULL OR p.price >= $3)\n  AND ($4::numeric IS NULL OR p.price <= $4)\nLIMIT 10;",
+        "options": {
+          "queryReplacement": "=[   \"{{ $json.property_type }}\",   \"{{ $json.location }}\",   \"{{ $json.min_price }}\",   \"{{ $json.max_price }}\" ]"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1184,
+        -192
+      ],
+      "id": "47ee6e61-3cc9-4309-888a-63845d4437a1",
+      "name": "Execute a SQL query1",
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "NlIwIIQC7enbvyEa",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO search_logs (customer_phone, location, property_type, min_price, max_price) \nVALUES ($1, $2, $3, $4, $5);",
+        "options": {
+          "queryReplacement": "=[   \"{{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}\",   \"{{ $('Check if Ready to Search').first().json.location }}\",   \"{{ $('Check if Ready to Search').first().json.property_type }}\",   \"{{ $('Check if Ready to Search').first().json.min_price }}\",   \"{{ $('Check if Ready to Search').first().json.max_price }}\" ]"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1952,
+        -368
+      ],
+      "id": "1392953c-51b5-42d7-b729-fa6dda430030",
+      "name": "Execute a SQL query3",
+      "credentials": {
+        "postgres": {
+          "id": "NlIwIIQC7enbvyEa",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM conversation_state WHERE customer_phone = $1;",
+        "options": {
+          "queryReplacement": "=[   \"{{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}\" ]"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        496,
+        -400
+      ],
+      "id": "60f718e3-6f0c-4b1f-90a8-3e7b7c72d070",
+      "name": "clear session",
+      "credentials": {
+        "postgres": {
+          "id": "NlIwIIQC7enbvyEa",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Receive WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Filter Webhooks & Prevent Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Webhooks & Prevent Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Extract Message Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Text": {
+      "main": [
+        [
+          {
+            "node": "Is it a Greeting or Reset?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it a Greeting or Reset?": {
+      "main": [
+        [
+          {
+            "node": "clear session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Did user ask for Agent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did user ask for Agent?": {
+      "main": [
+        [
+          {
+            "node": "Agent Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Regex Extractor",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Ready to Search": {
+      "main": [
+        [
+          {
+            "node": "Are All Fields Provided?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Are All Fields Provided?": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Ask Missing Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Were Any Properties Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Properties",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send No Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Properties": {
+      "main": [
+        [
+          {
+            "node": "Send Property Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Property Matches": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Menu": {
+      "main": [
+        []
+      ]
+    },
+    "Regex Extractor": {
+      "main": [
+        [
+          {
+            "node": "Execute a SQL query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query": {
+      "main": [
+        [
+          {
+            "node": "Check if Ready to Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute a SQL query1": {
+      "main": [
+        [
+          {
+            "node": "Were Any Properties Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "clear session": {
+      "main": [
+        [
+          {
+            "node": "Send Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Handoff": {
+      "main": [
+        [
+          {
+            "node": "clear session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "fa5dea43-6928-4dad-a8c3-2c1f44dd4bae",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "60f8dd9e7f8eb7e3fe45a7e4c22d48053e8981aaf991123c356920d14c040cbd"
+  },
+  "id": "O9cclW0ezghjGeeM",
+  "tags": []
+}
