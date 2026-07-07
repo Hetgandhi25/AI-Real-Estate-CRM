@@ -1,0 +1,1678 @@
+{
+  "name": "in-progress-operators",
+  "nodes": [
+    {
+      "parameters": {
+        "model": "llama3.1:8b",
+        "options": {
+          "temperature": 0.2,
+          "topP": 0.7
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOllama",
+      "typeVersion": 1,
+      "position": [
+        384,
+        208
+      ],
+      "id": "0a6120ad-8c3f-4462-817d-f88d47676895",
+      "name": "Ollama Chat Model",
+      "credentials": {
+        "ollamaApi": {
+          "id": "x7sFWChvjpfLaZql",
+          "name": "Ollama account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "messages"
+        ],
+        "options": {}
+      },
+      "type": "n8n-nodes-base.whatsAppTrigger",
+      "typeVersion": 1,
+      "position": [
+        -528,
+        -128
+      ],
+      "id": "dbb38d05-2b84-47b5-a1a6-7298a15e83a1",
+      "name": "Receive WhatsApp Message",
+      "webhookId": "f925bdcd-b992-4360-8072-360da77ab9e2",
+      "credentials": {
+        "whatsAppTriggerApi": {
+          "id": "XSawdRScqElohdDp",
+          "name": "WhatsApp OAuth account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const incoming = $('Receive WhatsApp Message').item.json;\n\n// 1. Drop the event immediately if it's NOT a standard user text message\nif (!incoming.messages || !incoming.messages[0] || incoming.messages[0].type !== 'text') {\n    return []; // Empty array stops the workflow silently\n}\n\nconst msgId = incoming.messages[0].id;\nconst userPhone = incoming.contacts[0].wa_id;\n\n// $getWorkflowStaticData only works when the workflow is ACTIVE (Published).\n// It saves data across executions.\nconst staticData = $getWorkflowStaticData('global');\nif (!staticData.processedIds) staticData.processedIds = {};\n\n// 2. Check if already processed (Meta Retry Prevention)\nconst key = `${userPhone}:${msgId}`;\nif (staticData.processedIds[key]) {\n  // Duplicate detected — stop execution silently to break the loop\n  return []; \n}\n\n// 3. Mark as processed\nstaticData.processedIds[key] = Date.now();\n\n// 4. Memory management (keep last 200 IDs to avoid unbounded growth)\nconst keys = Object.keys(staticData.processedIds);\nif (keys.length > 200) {\n  keys.sort((a, b) => staticData.processedIds[a] - staticData.processedIds[b]);\n  delete staticData.processedIds[keys[0]];\n}\n\nreturn $input.all();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -128
+      ],
+      "id": "9f0ca1bc-3d60-4f0a-a970-2af09c3b371a",
+      "name": "Filter Webhooks & Prevent Duplicates"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0483a14b-92f6-4a23-a40a-57e41b012cff",
+              "name": "messages[0].text.body",
+              "value": "={{ $('Receive WhatsApp Message').item.json.messages[0].text.body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -208,
+        -128
+      ],
+      "id": "31c92bd9-afdd-4116-8b5c-b9eb2ca68f3a",
+      "name": "Extract Message Text"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1f78722f-34da-494d-8339-e4b27fc9e44a",
+              "leftValue": "={{\n\n[\n\n'hi',\n\n'hello',\n\n'hey',\n\n'hii',\n\n'helo',\n\n'good morning',\n\n'good afternoon',\n\n'good evening',\n\n'reset',\n\n'restart',\n'start'\n]\n.includes(\nString($json.messages[0].text.body || '')\n.toLowerCase()\n.trim()\n)\n}}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        -32,
+        -128
+      ],
+      "id": "1278a4c7-a0e6-423b-ae10-74b7b19e7c52",
+      "name": "Is it a Greeting or Reset?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "a41bc69a-db83-4cac-9605-8ff486918974",
+              "leftValue": "={{ String($json.messages[0].text.body || '') .toLowerCase() .trim() === 'agent' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        160,
+        -112
+      ],
+      "id": "a67bb656-7ab0-4ec4-b962-bf9436770a64",
+      "name": "Did user ask for Agent?"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Current user message:\n{{ $('Extract Message Text').item.json.messages[0].text.body }}",
+        "options": {
+          "systemMessage": "You are a JSON extraction engine for a real estate platform.\nYour sole purpose is to extract constraints from user queries into a strictly formatted JSON object.\n\nRules:\n- Output STRICT JSON ONLY.\n- No markdown formatting.\n- No explanations.\n- No conversational text before or after the JSON.\n- Normalise property types into: flat, villa, bungalow, land, plot, shop, office, penthouse.\n\n### OPERATOR MAPPING (critical — always extract)\nOperators for Size_sqft, Price_Lakh, Bedrooms:\n- max           → under, below, less than, lower than\n- min           → above, over, more than, greater than, 60 lakh+\n- max_inclusive → at most, up to, no more than, maximum of\n- min_inclusive → at least, no less than, minimum of\n- approx        → around, approximately, about, ~, roughly\n- between       → between X and Y, from X to Y, X to Y range, X-Y lakh\n- exact         → exactly, plain number with no qualifier\n- any           → user says \"any\", \"any size\", \"no preference\", \"doesn't matter\"\n\n### VALUE NORMALIZATION RULES\n- BUDGET: Convert all figures to Lakhs (e.g., \"1 crore\" → \"100\", \"35L\" → \"35\"). If the user explicitly says \"any\", \"any budget\", \"no budget\", or \"no limit\", set Price_Lakh to \"any\".\n- SIZE: Convert shorthand (e.g., \"1.1k sqft\" → \"1100\").\n- BEDROOMS: Extract numeric value only (e.g., \"3 bhk\" → \"3\").\n- LOCATION: Convert named areas to lowercase. If the user says \"anywhere\", \"any location\", or just the single word \"any\" → set Location to \"any\".\n- BETWEEN: For \"between X and Y\", set the main op to \"between\", and fill the min and max fields accordingly.\n\n### CONTRADICTION RULE\nIf user says BOTH \"under X\" AND \"above Y\" for the exact same field in one message:\n- Set reply to: \"I noticed conflicting constraints for this field. Could you clarify?\"\n- Keep previous field values; do not update the contradicting field.\n\n### OUTPUT RULES\n- A complete search requires exactly 3 fields: Location, Type, and Budget (Price_Lakh).\n- `reply` must NEVER be empty.\n- If Location, Type, or Price_Lakh is missing → set `reply` to politely ask for the missing fields (e.g., \"Please share your preferred location and budget.\").\n- If ALL THREE mandatory fields are present (Location, Type, Price_Lakh) → set `reply` to: \"Let me check matching properties for you.\"\n- Size_sqft and Bedrooms are OPTIONAL. Never ask for them if they are missing.\n\n### OUTPUT FORMAT (All 13 fields are required every single time. Use empty strings \"\" for null values)\n{\n  \"reply\": \"\",\n  \"Location\": \"\",\n  \"Type\": \"\",\n  \"Size_sqft\": \"\",\n  \"Size_sqft_op\": \"\",\n  \"Size_sqft_min\": \"\",\n  \"Size_sqft_max\": \"\",\n  \"Price_Lakh\": \"\",\n  \"Price_Lakh_op\": \"\",\n  \"Price_Lakh_min\": \"\",\n  \"Price_Lakh_max\": \"\",\n  \"Bedrooms\": \"\",\n  \"Bedrooms_op\": \"\"\n}\n\n### EXAMPLES\n\nUser: Gota\n{\"reply\":\"What type of property and budget are you looking for?\",\"Location\":\"gota\",\"Type\":\"\",\"Size_sqft\":\"\",\"Size_sqft_op\":\"\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"\",\"Price_Lakh_op\":\"\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: flat\n{\"reply\":\"Please share your preferred location and budget.\",\"Location\":\"\",\"Type\":\"flat\",\"Size_sqft\":\"\",\"Size_sqft_op\":\"\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"\",\"Price_Lakh_op\":\"\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: Need a flat exactly 1200 sqft with no budget\n{\"reply\":\"Please share your preferred location.\",\"Location\":\"\",\"Type\":\"flat\",\"Size_sqft\":\"1200\",\"Size_sqft_op\":\"exact\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"any\",\"Price_Lakh_op\":\"\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: villa between 1500 and 2000 sqft\n{\"reply\":\"Please share your preferred location and budget.\",\"Location\":\"\",\"Type\":\"villa\",\"Size_sqft\":\"1750\",\"Size_sqft_op\":\"between\",\"Size_sqft_min\":\"1500\",\"Size_sqft_max\":\"2000\",\"Price_Lakh\":\"\",\"Price_Lakh_op\":\"\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: Flat in Ahmedabad under 80 lakh\n{\"reply\":\"Let me check matching properties for you.\",\"Location\":\"ahmedabad\",\"Type\":\"flat\",\"Size_sqft\":\"\",\"Size_sqft_op\":\"\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"80\",\"Price_Lakh_op\":\"max\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: flat in gota of more than 60 lakhs\n{\"reply\":\"Let me check matching properties for you.\",\"Location\":\"gota\",\"Type\":\"flat\",\"Size_sqft\":\"\",\"Size_sqft_op\":\"\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"60\",\"Price_Lakh_op\":\"min\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: flat in gota around 60 lakh\n{\"reply\":\"Let me check matching properties for you.\",\"Location\":\"gota\",\"Type\":\"flat\",\"Size_sqft\":\"\",\"Size_sqft_op\":\"\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"60\",\"Price_Lakh_op\":\"approx\",\"Price_Lakh_min\":\"\",\"Price_Lakh_max\":\"\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}\n\nUser: flat in gota between 40 and 60 lakh\n{\"reply\":\"Let me check matching properties for you.\",\"Location\":\"gota\",\"Type\":\"flat\",\"Size_sqft\":\"\",\"Size_sqft_op\":\"\",\"Size_sqft_min\":\"\",\"Size_sqft_max\":\"\",\"Price_Lakh\":\"\",\"Price_Lakh_op\":\"between\",\"Price_Lakh_min\":\"40\",\"Price_Lakh_max\":\"60\",\"Bedrooms\":\"\",\"Bedrooms_op\":\"\"}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        368,
+        16
+      ],
+      "id": "d1c1e081-b52a-4902-8e6b-59a731c364f2",
+      "name": "Extract Real Estate Entities"
+    },
+    {
+      "parameters": {
+        "jsCode": "const raw = $json.output || '';\n\n// All fields always present — prevents downstream undefined issues\nconst defaults = {\n  reply: '',\n  Location: '',\n  Size_sqft: '',       \n  Size_sqft_op: '',\n  Size_sqft_min: '',   \n  Size_sqft_max: '',\n  Type: '',\n  Price_Lakh: '',      \n  Price_Lakh_op: '',\n  Price_Lakh_min: '',  \n  Price_Lakh_max: '',\n  Bedrooms: '',        \n  Bedrooms_op: '',\n  Furnished: ''\n};\n\ntry {\n  // Strip markdown fences, extract JSON object\n  const cleaned = raw\n    .replace(/```json[\\s\\S]*?```/g, m => m.slice(7, -3))\n    .replace(/```/g, '')\n    .trim();\n\n  const jsonMatch = cleaned.match(/\\{[\\s\\S]*\\}/);\n  if (!jsonMatch) throw new Error('No JSON object found in output');\n\n  const parsed = JSON.parse(jsonMatch[0]);\n\n  // Normalize operator strings to lowercase\n  const opFields = [\n    'Price_Lakh_op','Size_sqft_op','Bedrooms_op'\n  ];\n  for (const f of opFields) {\n    if (parsed[f]) {\n      parsed[f] = String(parsed[f]).toLowerCase().trim();\n    }\n  }\n\n  // Normalize location to lowercase\n  if (parsed.Location) {\n    const loc = String(parsed.Location).toLowerCase().trim();\n    parsed.Location = ['any', 'any area', 'anywhere',\n                       'all areas', 'any location'].includes(loc)\n      ? 'any' : loc; // <--- THIS IS THE FIX. Changed '' to 'any'\n  }\n\n  // Normalize type to lowercase\n  if (parsed.Type) {\n    parsed.Type = String(parsed.Type).toLowerCase().trim();\n  }\n\n  // Merge parsed over defaults so all fields always exist\n  return [{ json: { ...defaults, ...parsed } }];\n\n} catch (err) {\n  return [{ json: { ...defaults, _parseError: err.message } }];\n}"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        16
+      ],
+      "id": "0eb372a6-0cc1-4b1b-989f-0df334a09e88",
+      "name": "Parse & Clean LLM Output"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327610038,
+          "mode": "list",
+          "cachedResultName": "user-session",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=1327610038"
+        },
+        "filtersUI": {
+          "values": [
+            {
+              "lookupColumn": "user-number",
+              "lookupValue": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        784,
+        16
+      ],
+      "id": "98381cfc-cc98-4eed-88c6-567e99fc290a",
+      "name": "Fetch User History",
+      "alwaysOutputData": true,
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const newData = $('Parse & Clean LLM Output').first().json;\nconst oldRow = $input.first()?.json || {};\n\nconst pick = (n, o) =>\n  (n !== undefined && n !== null && String(n).trim() !== '') ? n : (o || '');\n\nreturn [{\n  json: {\n    User_Number:    $('Receive WhatsApp Message').item.json.contacts[0].wa_id,\n    Location:       pick(newData.Location,       oldRow.location),\n    Type:           pick(newData.Type,           oldRow.type),\n    Price_Lakh:     pick(newData.Price_Lakh,     oldRow['price-lakhs']),\n    Price_Lakh_op:  pick(newData.Price_Lakh_op,  oldRow['price-lakh-op']),\n    Price_Lakh_min: pick(newData.Price_Lakh_min, oldRow['price-lakh-min']),\n    Price_Lakh_max: pick(newData.Price_Lakh_max, oldRow['price-lakh-max']),\n    Size_sqft:      pick(newData.Size_sqft,      oldRow['size-sqft']),\n    Size_sqft_op:   pick(newData.Size_sqft_op,   oldRow['size-sqft-op']),\n    Size_sqft_min:  pick(newData.Size_sqft_min,  oldRow['size-sqft-min']),\n    Size_sqft_max:  pick(newData.Size_sqft_max,  oldRow['size-sqft-max']),\n    Bedrooms:       pick(newData.Bedrooms,       oldRow.bedrooms),\n    Bedrooms_op:    pick(newData.Bedrooms_op,    oldRow['bedrooms-op'])\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        944,
+        16
+      ],
+      "id": "1729481a-7d84-422d-b965-ec4ae5385006",
+      "name": "Combine New Text with History"
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327610038,
+          "mode": "list",
+          "cachedResultName": "user-session",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=1327610038"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user-number": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+            "location": "={{ $json.Location }}",
+            "type": "={{ $json.Type }}",
+            "price-lakhs": "={{ $json.Price_Lakh }}",
+            "updated-at": "={{ $now }}",
+            "price-lakh-op": "={{ $json.Price_Lakh_op }}",
+            "size-sqft": "={{ $json.Size_sqft }}",
+            "size-sqft-op": "={{ $json.Size_sqft_op }}",
+            "price-lakh-min": "={{ $json.Price_Lakh_min }}",
+            "price-lakh-max": "={{ $json.Price_Lakh_max }}",
+            "size-sqft-min": "={{ $json.Size_sqft_min }}",
+            "size-sqft-max": "={{ $json.Size_sqft_max }}",
+            "bedrooms": "={{ $json.Bedrooms }}",
+            "bedrooms-op": "={{ $json.Bedrooms_op}}"
+          },
+          "matchingColumns": [
+            "user-number"
+          ],
+          "schema": [
+            {
+              "id": "user-number",
+              "displayName": "user-number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakhs",
+              "displayName": "price-lakhs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakh-op",
+              "displayName": "price-lakh-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-min",
+              "displayName": "price-lakh-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-max",
+              "displayName": "price-lakh-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft",
+              "displayName": "size-sqft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-min",
+              "displayName": "size-sqft-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-max",
+              "displayName": "size-sqft-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-op",
+              "displayName": "size-sqft-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms",
+              "displayName": "bedrooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms-op",
+              "displayName": "bedrooms-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated-at",
+              "displayName": "updated-at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1120,
+        16
+      ],
+      "id": "b6be8af7-6527-49cb-b040-325e1208d49f",
+      "name": "Save Updated Context",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const j = $('Combine New Text with History').first().json;\n\n// Helper to check if a field has data (including the word \"any\")\nfunction isFieldPresent(val) {\n  if (val === undefined || val === null) return false;\n  const str = String(val).toLowerCase().trim();\n  return str !== ''; \n}\n\nconst hasLocation = isFieldPresent(j.Location);\nconst hasType = isFieldPresent(j.Type);\nconst hasPrice = isFieldPresent(j.Price_Lakh); \n\n// Location and Type are mandatory. Price is optional.\nconst readyToSearch = hasLocation && hasType && hasPrice;\n\nreturn [{\n  json: {\n    ...j,\n    readyToSearch,\n    hasLocation,\n    hasType,\n    hasPrice\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        16
+      ],
+      "id": "479441a7-6f89-4a0d-bbd4-8e9966267fae",
+      "name": "Check if Ready to Search"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "1d6183ea-2ed5-4462-a412-b2185e674947",
+              "leftValue": "={{ $json.readyToSearch === true }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1488,
+        16
+      ],
+      "id": "78b605b3-3b37-4fb1-a2b6-414605321df0",
+      "name": "Are All Fields Provided?"
+    },
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 340338860,
+          "mode": "list",
+          "cachedResultName": "Inventory",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=340338860"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1648,
+        -128
+      ],
+      "id": "0bf9d391-0d7f-4f99-ac94-ea4162b2b9f6",
+      "name": "Download Entire Inventory",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const req = $('Combine New Text with History').first().json;\n\nfunction normalize(v){\n  return String(v || '').toLowerCase().trim();\n}\n\nconst location = normalize(req.Location);\nconst type = normalize(req.Type);\n\nconst ahmedabadAreas = [\n  'south bopal','bopal','satellite','gota','prahlad nagar','sg highway',\n  'thaltej','bodakdev','navrangpura','chandkheda','science city',\n  'vastral','nikol','shela','ambli','vasna','maninagar','new ranip','ranip'\n];\n\nconst isAhmedabadSearch = (location === 'ahmedabad');\nconst inventory = $input.all();\n\nconst matches = inventory.filter(item => {\n  const row = item.json;\n  const rowLocation = normalize(row.Location);\n  const rowType = normalize(row.Type);\n  const available = normalize(row.Available);\n\n  if (available !== 'yes' && available !== 'maybe') return false;\n\n  // --- LOCATION FILTER (Skip if \"any\") ---\n  if (location !== 'any' && location !== '') {\n    if (isAhmedabadSearch) {\n      const matchedAhmedabadArea = ahmedabadAreas.some(area => rowLocation.includes(area));\n      if (!matchedAhmedabadArea) return false;\n    } else if (!rowLocation.includes(location)) {\n      return false;\n    }\n  }\n\n  // --- TYPE FILTER (Skip if \"any\") ---\n  if (type !== 'any' && type !== '') {\n    if (!rowType.includes(type)) return false;\n  }\n\n  // ── PRICE / BUDGET FILTER ──────────────────────────────────────────\n  const priceRaw = req.Price_Lakh;\n  const priceOp  = String(req.Price_Lakh_op || '').toLowerCase().trim();\n  const hasPrice = (\n    priceRaw !== '' &&\n    priceRaw !== null &&\n    priceRaw !== undefined &&\n    priceRaw !== 'any'\n  );\n  \n  if (hasPrice) {\n    const budget = Number(priceRaw);\n    const rowPrice = Number(row.Price_Lakh || 0); // Added to ensure rowPrice is defined\n    \n    if (!isNaN(budget)) {\n      if (priceOp === 'min') {\n        // above / more than / greater than / over / minimum / 60 lakh+\n        if (rowPrice <= budget) return false;\n      } else if (priceOp === 'max') {\n        // under / below / less than / lower than\n        if (rowPrice >= budget) return false;\n      } else if (priceOp === 'max_inclusive') {\n        // up to / at most / no more than / maximum\n        if (rowPrice > budget) return false;\n      } else if (priceOp === 'min_inclusive') {\n        // at least / no less than\n        if (rowPrice < budget) return false;\n      } else if (priceOp === 'exact') {\n        // exactly X lakh\n        if (rowPrice !== budget) return false;\n      } else if (priceOp === 'approx') {\n        // around / approximately / about\n        const tolerance = budget * 0.15;\n        if (Math.abs(rowPrice - budget) > tolerance) return false;\n      } else if (priceOp === 'between') {\n        // between X and Y lakh\n        const bMin = Number(req.Price_Lakh_min || 0);\n        const bMax = Number(req.Price_Lakh_max || Infinity);\n        if (rowPrice < bMin || rowPrice > bMax) return false;\n      } else {\n        // Default fallback: treat plain number as ceiling (max)\n        if (rowPrice > budget) return false;\n      }\n    }\n  }\n  // If !hasPrice → any budget → no price filter → all prices pass through\n\n  // ── SIZE FILTER ─────────────────────────────────────────────────────\n  const sizeRaw = req.Size_sqft;\n  const sizeOp  = String(req.Size_sqft_op || '').toLowerCase().trim();\n  const hasSize = (\n    sizeRaw !== '' &&\n    sizeRaw !== null &&\n    sizeRaw !== undefined &&\n    sizeRaw !== 'any'\n  );\n  \n  if (hasSize) {\n    const requestedSize = Number(sizeRaw);\n    const rowSize = Number(row.Size_sqft || 0);\n    \n    if (!isNaN(requestedSize)) {\n      if (sizeOp === 'min') {\n        if (rowSize <= requestedSize) return false;\n      } else if (sizeOp === 'max') {\n        if (rowSize >= requestedSize) return false;\n      } else if (sizeOp === 'max_inclusive') {\n        if (rowSize > requestedSize) return false;\n      } else if (sizeOp === 'min_inclusive') {\n        if (rowSize < requestedSize) return false;\n      } else if (sizeOp === 'approx') {\n        const tol = requestedSize * 0.15;\n        if (Math.abs(rowSize - requestedSize) > tol) return false;\n      } else if (sizeOp === 'between') {\n        const sMin = Number(req.Size_sqft_min || 0);\n        const sMax = Number(req.Size_sqft_max || Infinity);\n        if (rowSize < sMin || rowSize > sMax) return false;\n      } else {\n        // exact fallback\n        if (rowSize !== requestedSize) return false;\n      }\n    }\n  }\n\n  return true;\n});\n\nif (matches.length === 0) {\n  return [{ json: { noMatch: true } }];\n}\n\nreturn [{ json: { properties: matches, count: matches.length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1776,
+        -128
+      ],
+      "id": "0ecd528a-3434-4977-8db1-5ead83cf7898",
+      "name": "Apply Filters",
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8da15f5e-ce9b-4683-b81e-d5937e20b58c",
+              "leftValue": "={{ !$json.noMatch }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1920,
+        -128
+      ],
+      "id": "85f60817-3459-4fea-9c0d-234deeacdc91",
+      "name": "Were Any Properties Found?"
+    },
+    {
+      "parameters": {
+        "jsCode": "const properties = $json.properties || [];\n\nif (properties.length === 0) {\n\nreturn [{\njson: {\nreply:\n`No matching properties found.\n\nYou can type \"Hi\" to start a new search.`\n}\n}];\n\n}\n\nconst limited = properties.slice(0, 10);\n\nlet reply =\n`🏡 Here are some matching properties:\n\n`;\n\nfor (const prop of limited) {\n\nconst row = prop.json || {};\n\nreply +=\n`• ${row.Property_ID || ''}\n📍 ${row.Location || ''}\n🏠 ${row.Type || ''}\n📐 ${row.Size_sqft || ''} sqft\n💰 ${row.Price_Lakh || ''} Lakh\n\n`;\n\n}\n\nreply +=\n`👨‍💼 Interested in any property?\n\nType: Agent\n\nOr contact:\n📞 123456789`;\n\nreturn [{\njson: {\n...$json,\nreply\n}\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2096,
+        -272
+      ],
+      "id": "41cf2676-0552-49dd-b723-b1fd899f03a1",
+      "name": "Format Properties"
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "={{ $json.reply }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2272,
+        -272
+      ],
+      "id": "81cadf92-44df-4520-8253-dd870236a1b3",
+      "name": "Send Property Matches",
+      "webhookId": "1d05b64c-8c7b-4350-8f5f-81e87d9e03d0",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1247470516,
+          "mode": "list",
+          "cachedResultName": "requirement_sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=1247470516"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Type": "={{ $json.Type }}",
+            "Location": "={{ $json.Location }}",
+            "Price_Lakh": "={{ $json.Price_Lakh }}",
+            "User_Number": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+            "Timestamp": "={{ $now }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Timestamp",
+              "displayName": "Timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "User_Number",
+              "displayName": "User_Number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Location",
+              "displayName": "Location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Size_sqft",
+              "displayName": "Size_sqft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Type",
+              "displayName": "Type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Price_Lakh",
+              "displayName": "Price_Lakh",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2480,
+        -432
+      ],
+      "id": "fa8b274d-4ae1-4130-aeeb-3a1643141ff1",
+      "name": "Log Successful Search",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327610038,
+          "mode": "list",
+          "cachedResultName": "user-session",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=1327610038"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user-number": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+            "updated-at": "={{ $now }}",
+            "location": "={{ '' }}",
+            "type": "={{ '' }}",
+            "price-lakhs": "={{ '' }}",
+            "price-lakh-op": "={{ '' }}",
+            "size-sqft": "={{ '' }}",
+            "size-sqft-op": "={{ '' }}",
+            "price-lakh-max": "={{ '' }}",
+            "price-lakh-min": "={{ '' }}",
+            "size-sqft-min": "={{ '' }}",
+            "size-sqft-max": "={{ '' }}",
+            "bedrooms": "={{ '' }}",
+            "bedrooms-op": "={{ '' }}"
+          },
+          "matchingColumns": [
+            "user-number"
+          ],
+          "schema": [
+            {
+              "id": "user-number",
+              "displayName": "user-number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakhs",
+              "displayName": "price-lakhs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakh-op",
+              "displayName": "price-lakh-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-min",
+              "displayName": "price-lakh-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-max",
+              "displayName": "price-lakh-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft",
+              "displayName": "size-sqft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-min",
+              "displayName": "size-sqft-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-max",
+              "displayName": "size-sqft-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-op",
+              "displayName": "size-sqft-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms",
+              "displayName": "bedrooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms-op",
+              "displayName": "bedrooms-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated-at",
+              "displayName": "updated-at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        192,
+        -400
+      ],
+      "id": "548c68c8-7628-4aaa-8c3f-9bd776845915",
+      "name": "Clear Session",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "=🏡 Welcome to XYZ Properties Ltd\nI’m your Property Assistant 👋\n\nWe can help you find:\n✅ Flats, Villas, Plots, Commercial Spaces\n\nPlease share these details in the below order:\n📍 Location\n🏠 Property Type\n💰 Budget\n\nExample: Flat in Ahmedabad under 80 lakh\n\n👨‍💼 Want direct assistance then Type: Agent\nOur property representative will assist you further.",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        336,
+        -400
+      ],
+      "id": "e64754a1-313b-41dd-95a1-218c4c4ae576",
+      "name": "Send Menu",
+      "webhookId": "4b46280a-d86d-445d-8e98-ea7666e7ee00",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "👨‍💼 Our property specialist will connect with you shortly.  \nFor immediate assistance, contact: 📞 123456789  \nPlease share your preferred: \n📍 Location \n🏠 Property Type \n💰 Budget",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        368,
+        -224
+      ],
+      "id": "bcb640b3-14fa-498f-b8f1-c967c0b58111",
+      "name": "Agent Handoff",
+      "webhookId": "ca6b2a9b-1cdf-4193-b5d4-c1e38d93960f",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327610038,
+          "mode": "list",
+          "cachedResultName": "user-session",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=1327610038"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user-number": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+            "updated-at": "={{ $now }}",
+            "location": "={{ $('Combine New Text with History').first().json.Location || '' }}",
+            "type": "={{ $('Combine New Text with History').first().json.Type || '' }}",
+            "price-lakhs": "={{ $('Combine New Text with History').first().json.Price_Lakh || '' }}",
+            "price-lakh-op": "={{ $('Combine New Text with History').first().json.Price_Lakh_op || '' }}",
+            "size-sqft": "={{ $('Combine New Text with History').first().json.Size_sqft || '' }}",
+            "size-sqft-op": "={{ $('Combine New Text with History').first().json.Size_sqft_op || '' }}",
+            "price-lakh-min": "={{ $('Combine New Text with History').first().json.Price_Lakh_min || '' }}",
+            "price-lakh-max": "={{ $('Combine New Text with History').first().json.Price_Lakh_max || '' }}",
+            "size-sqft-min": "={{ $('Combine New Text with History').first().json.Size_sqft_min || '' }}",
+            "size-sqft-max": "={{ $('Combine New Text with History').first().json.Size_sqft_max || '' }}",
+            "bedrooms": "={{ $('Combine New Text with History').first().json.Bedrooms || '' }}",
+            "bedrooms-op": "={{ $('Combine New Text with History').first().json.Bedrooms_op || '' }}"
+          },
+          "matchingColumns": [
+            "user-number"
+          ],
+          "schema": [
+            {
+              "id": "user-number",
+              "displayName": "user-number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakhs",
+              "displayName": "price-lakhs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakh-op",
+              "displayName": "price-lakh-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-min",
+              "displayName": "price-lakh-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-max",
+              "displayName": "price-lakh-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft",
+              "displayName": "size-sqft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-min",
+              "displayName": "size-sqft-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-max",
+              "displayName": "size-sqft-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-op",
+              "displayName": "size-sqft-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms",
+              "displayName": "bedrooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms-op",
+              "displayName": "bedrooms-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated-at",
+              "displayName": "updated-at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1696,
+        144
+      ],
+      "id": "f626cae1-0a24-43b6-83c9-efecdf107f2b",
+      "name": "Keep Session",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "={{\n(() => {\n  // Pulling the flags directly from the Code node so they aren't erased\n  const check = $('Check if Ready to Search').first().json;\n  let missing = [];\n\n  if (!check.hasLocation) {\n    missing.push('📍 Location');\n  }\n  if (!check.hasType) {\n    missing.push('🏠 Property Type');\n  }\n  if (!check.hasPrice) {\n    missing.push('💰 Budget (You can also say \"any budget\" or \"no limit\")');\n  }\n\n  return `Please share:\\n\\n${missing.join('\\n')}\\n\\nExample:\\nFlat in Ahmedabad under 80 lakh`;\n})()\n}}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        1840,
+        144
+      ],
+      "id": "e27f94d1-45eb-4e72-8712-b7b8d73900ae",
+      "name": "Ask Missing Info",
+      "webhookId": "6f70bcd8-202c-452d-83ae-add50e8a5c27",
+      "executeOnce": false,
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "appendOrUpdate",
+        "documentId": {
+          "__rl": true,
+          "value": "19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw",
+          "mode": "list",
+          "cachedResultName": "n8n sheet",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 1327610038,
+          "mode": "list",
+          "cachedResultName": "user-session",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/19IrVfR65TRFPBfKfDAG_gCZ9GiiOgduX_03dAIP6fVw/edit#gid=1327610038"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "user-number": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+            "updated-at": "={{ $now }}",
+            "location": "={{ $('Combine New Text with History').first().json.Location || '' }}",
+            "type": "={{ $('Combine New Text with History').first().json.Type || '' }}",
+            "price-lakhs": "={{ $('Combine New Text with History').first().json.Price_Lakh || '' }}",
+            "price-lakh-op": "={{ $('Combine New Text with History').first().json.Price_Lakh_op || '' }}",
+            "size-sqft": "={{ $('Combine New Text with History').first().json.Size_sqft || '' }}",
+            "size-sqft-op": "={{ $('Combine New Text with History').first().json.Size_sqft_op || '' }}",
+            "price-lakh-min": "={{ $('Combine New Text with History').first().json.Price_Lakh_min || '' }}",
+            "price-lakh-max": "={{ $('Combine New Text with History').first().json.Price_Lakh_max || '' }}",
+            "size-sqft-min": "={{ $('Combine New Text with History').first().json.Size_sqft_min || '' }}",
+            "size-sqft-max": "={{ $('Combine New Text with History').first().json.Size_sqft_max || '' }}",
+            "bedrooms": "={{ $('Combine New Text with History').first().json.Bedrooms || '' }}",
+            "bedrooms-op": "={{ $('Combine New Text with History').first().json.Bedrooms_op || '' }}"
+          },
+          "matchingColumns": [
+            "user-number"
+          ],
+          "schema": [
+            {
+              "id": "user-number",
+              "displayName": "user-number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "location",
+              "displayName": "location",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "type",
+              "displayName": "type",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakhs",
+              "displayName": "price-lakhs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "price-lakh-op",
+              "displayName": "price-lakh-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-min",
+              "displayName": "price-lakh-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "price-lakh-max",
+              "displayName": "price-lakh-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft",
+              "displayName": "size-sqft",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-min",
+              "displayName": "size-sqft-min",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-max",
+              "displayName": "size-sqft-max",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "size-sqft-op",
+              "displayName": "size-sqft-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms",
+              "displayName": "bedrooms",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "bedrooms-op",
+              "displayName": "bedrooms-op",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "updated-at",
+              "displayName": "updated-at",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2160,
+        -32
+      ],
+      "id": "8d801228-b0db-4330-b7e9-d3784a67ca42",
+      "name": "Keep Session (Fail)",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "hxlvAak0p6ds2akT",
+          "name": "Google Sheets account 3"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "send",
+        "phoneNumberId": "739831909894960",
+        "recipientPhoneNumber": "={{ $('Receive WhatsApp Message').item.json.contacts[0].wa_id }}",
+        "textBody": "😔 No matching properties found.\n\nPlease start a new search by sharing:\n\n📍 Location\n🏠 Property Type\n💰 Budget\n\nExample:\nLand in Gota under 120 lakh\n\nYou can also type:\nHi\n\n👨‍💼 Need expert assistance?\nType: Agent",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.whatsApp",
+      "typeVersion": 1.1,
+      "position": [
+        2304,
+        -32
+      ],
+      "id": "2eb0db50-1d64-40bd-aa6d-ef6826749069",
+      "name": "Send No Match",
+      "webhookId": "e49d8e63-f6a9-4ca8-b0e5-b29453dc0644",
+      "credentials": {
+        "whatsAppApi": {
+          "id": "TnAFWKpLZkOjWiL5",
+          "name": "WhatsApp account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Ollama Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Extract Real Estate Entities",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Receive WhatsApp Message": {
+      "main": [
+        [
+          {
+            "node": "Filter Webhooks & Prevent Duplicates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Webhooks & Prevent Duplicates": {
+      "main": [
+        [
+          {
+            "node": "Extract Message Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Message Text": {
+      "main": [
+        [
+          {
+            "node": "Is it a Greeting or Reset?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is it a Greeting or Reset?": {
+      "main": [
+        [
+          {
+            "node": "Clear Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Did user ask for Agent?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Did user ask for Agent?": {
+      "main": [
+        [
+          {
+            "node": "Agent Handoff",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract Real Estate Entities",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Real Estate Entities": {
+      "main": [
+        [
+          {
+            "node": "Parse & Clean LLM Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Clean LLM Output": {
+      "main": [
+        [
+          {
+            "node": "Fetch User History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch User History": {
+      "main": [
+        [
+          {
+            "node": "Combine New Text with History",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Combine New Text with History": {
+      "main": [
+        [
+          {
+            "node": "Save Updated Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Updated Context": {
+      "main": [
+        [
+          {
+            "node": "Check if Ready to Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check if Ready to Search": {
+      "main": [
+        [
+          {
+            "node": "Are All Fields Provided?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Are All Fields Provided?": {
+      "main": [
+        [
+          {
+            "node": "Download Entire Inventory",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keep Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Entire Inventory": {
+      "main": [
+        [
+          {
+            "node": "Apply Filters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Filters": {
+      "main": [
+        [
+          {
+            "node": "Were Any Properties Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Were Any Properties Found?": {
+      "main": [
+        [
+          {
+            "node": "Format Properties",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Keep Session (Fail)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Properties": {
+      "main": [
+        [
+          {
+            "node": "Send Property Matches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Property Matches": {
+      "main": [
+        [
+          {
+            "node": "Log Successful Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Log Successful Search": {
+      "main": [
+        []
+      ]
+    },
+    "Clear Session": {
+      "main": [
+        [
+          {
+            "node": "Send Menu",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Menu": {
+      "main": [
+        []
+      ]
+    },
+    "Keep Session": {
+      "main": [
+        [
+          {
+            "node": "Ask Missing Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Keep Session (Fail)": {
+      "main": [
+        [
+          {
+            "node": "Send No Match",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "3a0090a3-a384-4f06-bc07-07dd14b42afa",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "60f8dd9e7f8eb7e3fe45a7e4c22d48053e8981aaf991123c356920d14c040cbd"
+  },
+  "id": "yw7INcbMKJzqIhWZ",
+  "tags": []
+}
