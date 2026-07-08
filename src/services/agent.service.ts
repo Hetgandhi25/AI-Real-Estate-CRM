@@ -7,7 +7,7 @@ const createMockAgent = (payload: Partial<Agent>, id = `mock-${Date.now()}`): Ag
   id,
   userId: payload.userId ?? `user-${Date.now()}`,
   name: payload.name ?? "Agent Mock",
-  email: payload.email ?? "agent.mock@yandoxcrm.com",
+  email: payload.email ?? "agent.mock@propertycrm.com",
   role: "agent",
   experience: payload.experience ?? 3,
   specialization: payload.specialization ?? "Residential Sales",
@@ -17,8 +17,8 @@ const createMockAgent = (payload: Partial<Agent>, id = `mock-${Date.now()}`): Ag
 export async function getAgents(filters?: { search?: string }): Promise<Agent[]> {
   if (env.VITE_MOCK_AUTH) {
     return [
-      createMockAgent({ name: "Jordan Blake", email: "jordan@yandoxcrm.com", experience: 7, specialization: "Sales", performanceScore: 88 }),
-      createMockAgent({ name: "Sasha Reed", email: "sasha@yandoxcrm.com", experience: 5, specialization: "Rentals", performanceScore: 80 }),
+      createMockAgent({ name: "Jordan Blake", email: "jordan@propertycrm.com", experience: 7, specialization: "Sales", performanceScore: 88 }),
+      createMockAgent({ name: "Sasha Reed", email: "sasha@propertycrm.com", experience: 5, specialization: "Rentals", performanceScore: 80 }),
     ];
   }
 

@@ -67,11 +67,11 @@ async function main() {
 
   // 1. Get default Agent
   const agentUser = await prisma.user.findFirst({
-    where: { email: "agent@yandoxcrm.com" }
+    where: { email: "agent@propertycrm.com" }
   });
 
   if (!agentUser) {
-    console.error("❌ Could not find agent user (agent@yandoxcrm.com) to list properties under!");
+    console.error("❌ Could not find agent user (agent@propertycrm.com) to list properties under!");
     process.exit(1);
   }
 

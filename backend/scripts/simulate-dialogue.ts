@@ -28,7 +28,7 @@ async function handleMessage(text: string): Promise<string> {
       data: {
         name: CLIENT_NAME,
         phone: PHONE,
-        email: `${PHONE}@whatsapp.yandox.com`,
+        email: `${PHONE}@whatsapp.property.com`,
         notes: "Created via simulated dialogue test."
       }
     });

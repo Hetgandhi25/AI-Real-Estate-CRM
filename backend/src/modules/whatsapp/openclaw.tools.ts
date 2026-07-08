@@ -98,7 +98,7 @@ export async function createLead(params: {
   const { name, phone, email, budget, location, propertyType, propertyId, notes } = params;
 
   const cleanPhone = normalizePhone(phone);
-  const cleanEmail = email || `${cleanPhone}@whatsapp.yandox.com`;
+  const cleanEmail = email || `${cleanPhone}@whatsapp.property.com`;
   const budgetVal = budget ? (budget < 10000 ? budget * 100000 : budget) : null;
 
   if (!propertyId || !isValidUUID(propertyId)) {
@@ -183,7 +183,7 @@ export async function scheduleSiteVisit(params: {
 }) {
   const { phone, propertyId, date, time, notes } = params;
   const cleanPhone = normalizePhone(phone);
-  const cleanEmail = `${cleanPhone}@whatsapp.yandox.com`;
+  const cleanEmail = `${cleanPhone}@whatsapp.property.com`;
 
   if (propertyId && !isValidUUID(propertyId)) {
     throw new Error("Invalid propertyId format. Must be a valid UUID.");
@@ -265,7 +265,7 @@ export async function saveConversation(params: {
 }) {
   const { phone, pushName, messages } = params;
   const cleanPhone = normalizePhone(phone);
-  const cleanEmail = `${cleanPhone}@whatsapp.yandox.com`;
+  const cleanEmail = `${cleanPhone}@whatsapp.property.com`;
 
   // Get or Create Customer
   let customer = await prisma.customer.upsert({

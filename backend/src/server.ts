@@ -20,7 +20,7 @@ import { prisma } from "./prisma/index.js";
 import { redisConnection } from "./modules/whatsapp/redis.js";
 
 async function bootstrap() {
-  console.log("🚀 Starting Yandox API Server...");
+  console.log("🚀 Starting Property API Server...");
   
   try {
     console.log("⏳ [Server] Verifying PostgreSQL connection...");

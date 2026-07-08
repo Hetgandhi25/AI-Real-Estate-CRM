@@ -71,7 +71,7 @@ function Dashboard() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = "yandox-dashboard-summary.json";
+    link.download = "property-dashboard-summary.json";
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

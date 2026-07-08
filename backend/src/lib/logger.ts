@@ -8,7 +8,7 @@ const isProduction = env.NODE_ENV === "production";
 export const logger = pino({
   level: isProduction ? "info" : "debug",
   base: {
-    service: "yandox-crm",
+    service: "property-crm",
   },
   // In development, pretty-print logs. In production, keep them as raw JSON for ELK/Datadog.
   transport: isProduction

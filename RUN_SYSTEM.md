@@ -1,6 +1,6 @@
-# 🚀 Yandox CRM — Run System Guide
+# 🚀 Property CRM — Run System Guide
 
-> Step-by-step instructions to start, stop, and manage the Yandox CRM application.
+> Step-by-step instructions to start, stop, and manage the Property CRM application.
 
 ---
 
@@ -10,21 +10,21 @@ If you just want to run it immediately, open **two separate terminal windows** a
 
 **Terminal 1 — Backend:**
 ```bash
-cd yandox-crm-source/backend
+cd property-crm-source/backend
 npm install
 npm run dev
 ```
 
 **Terminal 2 — Frontend:**
 ```bash
-cd yandox-crm-source
+cd property-crm-source
 npm install
 npm run dev
 ```
 
 Then open your browser at: **http://localhost:5173**
 
-Login with: `admin@yandoxcrm.com` / `Admin@123`
+Login with: `admin@propertycrm.com` / `Admin@123`
 
 ---
 
@@ -35,7 +35,7 @@ Login with: `admin@yandoxcrm.com` / `Admin@123`
 ```bash
 # If you have the zip file, extract it
 # Then navigate into the project folder
-cd yandox-crm-source
+cd property-crm-source
 ```
 
 ---
@@ -106,10 +106,10 @@ npx tsx prisma/seed.ts
 > ✅ Seed data created successfully.
 > ─────────────────────────────────────────────────
 > Test Accounts:
->   ADMIN   admin@yandoxcrm.com   / Admin@123
->   MANAGER manager@yandoxcrm.com / Manager@123
->   AGENT   agent@yandoxcrm.com   / Agent@123
->   TEST    test@yandoxcrm.com    / Test@123
+>   ADMIN   admin@propertycrm.com   / Admin@123
+>   MANAGER manager@propertycrm.com / Manager@123
+>   AGENT   agent@propertycrm.com   / Agent@123
+>   TEST    test@propertycrm.com    / Test@123
 > ─────────────────────────────────────────────────
 > ```
 
@@ -140,7 +140,7 @@ Open a **new terminal window** (keep the backend terminal open):
 
 ```bash
 # Navigate to the root project directory (NOT backend/)
-cd yandox-crm-source
+cd property-crm-source
 
 # Install all frontend dependencies
 npm install
@@ -163,11 +163,11 @@ The root `.env` should contain:
 ```env
 VITE_API_BASE_URL=http://localhost:4000/api
 VITE_API_TIMEOUT=30000
-VITE_AUTH_TOKEN_KEY=yandox_access_token
-VITE_AUTH_REFRESH_TOKEN_KEY=yandox_refresh_token
+VITE_AUTH_TOKEN_KEY=property_access_token
+VITE_AUTH_REFRESH_TOKEN_KEY=property_refresh_token
 VITE_MOCK_AUTH=false
 VITE_ENABLE_QUERY_DEVTOOLS=true
-VITE_APP_NAME=Yandox
+VITE_APP_NAME=Property
 ```
 
 > ⚠️ **IMPORTANT:** `VITE_MOCK_AUTH=false` means the app will use the real backend.
@@ -178,7 +178,7 @@ VITE_APP_NAME=Yandox
 ### Step 6: Start the Frontend Dev Server
 
 ```bash
-# Make sure you're in the root directory (yandox-crm-source/)
+# Make sure you're in the root directory (property-crm-source/)
 npm run dev
 ```
 
@@ -251,7 +251,7 @@ npm run lint
 
 ```bash
 # Navigate to root (NOT backend/)
-cd yandox-crm-source
+cd property-crm-source
 
 # ─── DEVELOPMENT ──────────────────────────────────────
 # Start dev server with HMR (Hot Module Replacement)
@@ -313,11 +313,11 @@ Every time you restart your computer, you need to start both servers again:
 
 ```bash
 # Terminal 1 — Backend
-cd yandox-crm-source/backend
+cd property-crm-source/backend
 npm run dev
 
 # Terminal 2 — Frontend
-cd yandox-crm-source
+cd property-crm-source
 npm run dev
 ```
 

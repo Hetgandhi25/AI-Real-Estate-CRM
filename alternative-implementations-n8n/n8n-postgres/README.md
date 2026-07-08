@@ -23,7 +23,7 @@
 
 ## Overview
 
-This is the **enhanced prototype** of the Yandox Property CRM WhatsApp automation system. It takes the proven business logic from Phase 1 (Google Sheets) and replaces the storage layer with a production-grade relational database.
+This is the **enhanced prototype** of the Property Property CRM WhatsApp automation system. It takes the proven business logic from Phase 1 (Google Sheets) and replaces the storage layer with a production-grade relational database.
 
 ### Key Characteristics
 
@@ -922,10 +922,10 @@ Flow:
 psql -U postgres
 
 # Create database
-CREATE DATABASE yandox_property_crm;
+CREATE DATABASE property_property_crm;
 
 # Switch to database
-\c yandox_property_crm
+\c property_property_crm
 ```
 
 #### **Step 2: Create Tables**
@@ -1012,7 +1012,7 @@ VALUES
    - **Port**: 5432
    - **User**: postgres
    - **Password**: [your password]
-   - **Database**: yandox_property_crm
+   - **Database**: property_property_crm
 4. Add WhatsApp credentials:
    - **Phone Number ID**: Your Meta phone ID
    - **Access Token**: Your WhatsApp API token
@@ -1125,4 +1125,4 @@ While not as feature-rich as the OpenClaw production system, this implementation
 **Document Version**: 1.0  
 **Last Updated**: July 2026  
 **Status**: Active Reference Implementation  
-**Next Phase**: See `../../../docs/architecture/Yandox_CRM_Architecture_Walkthrough.pdf`
+**Next Phase**: See `../../../docs/architecture/Property_CRM_Architecture_Walkthrough.pdf`

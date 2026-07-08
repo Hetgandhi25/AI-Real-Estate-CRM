@@ -17,7 +17,7 @@ export const MOCK_SESSION = {
   refreshToken: "mock-refresh-token",
   user: {
     id: "user-1",
-    email: "hawkins@yandox.com",
+    email: "hawkins@property.com",
     name: "Hawkins Maru",
     role: "manager" as const,
     avatarInitials: "HM",

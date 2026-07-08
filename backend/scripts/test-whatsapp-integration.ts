@@ -31,7 +31,7 @@ async function simulateIncomingMessage(text: string, pushName: string): Promise<
   });
 
   if (!customer) {
-    const cleanEmail = `${TEST_PHONE}@whatsapp.yandox.com`;
+    const cleanEmail = `${TEST_PHONE}@whatsapp.property.com`;
     customer = await prisma.customer.create({
       data: {
         name: pushName || `WhatsApp User ${TEST_PHONE}`,

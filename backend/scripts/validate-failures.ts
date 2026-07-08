@@ -49,7 +49,7 @@ async function runFailureTesting() {
   // Let's log in as manager
   try {
     const loginRes = await axios.post(`${BASE_URL}/auth/login`, {
-      email: "manager@yandoxcrm.com",
+      email: "manager@propertycrm.com",
       password: "Manager@123"
     });
     const managerToken = loginRes.data?.data?.accessToken;

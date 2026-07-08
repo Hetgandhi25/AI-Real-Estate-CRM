@@ -1,6 +1,6 @@
-# Yandox Property CRM - System Architecture
+# Property Property CRM - System Architecture
 
-This document contains the complete current system architecture of the Yandox Property CRM, generated directly from an audit of the actual codebase.
+This document contains the complete current system architecture of the Property Property CRM, generated directly from an audit of the actual codebase.
 
 ## Phase 1 & 2 — Master System Architecture
 

@@ -34,7 +34,7 @@ export async function listCustomers(params: ListParams) {
   }
 
   if (whatsappOnly === "true" || whatsappOnly === true) {
-    where.email = { contains: "@whatsapp.yandox.com", mode: "insensitive" };
+    where.email = { contains: "@whatsapp.property.com", mode: "insensitive" };
   }
 
   const total = await prisma.customer.count({ where });

@@ -17,11 +17,11 @@ async function runApiValidation() {
   }
 
   // Test 2: Login to obtain JWT Token
-  console.log("\nTEST 2: Logging in as Admin (admin@yandoxcrm.com)...");
+  console.log("\nTEST 2: Logging in as Admin (admin@propertycrm.com)...");
   let token = "";
   try {
     const res = await axios.post(`${BASE_URL}/auth/login`, {
-      email: "admin@yandoxcrm.com",
+      email: "admin@propertycrm.com",
       password: "Admin@123"
     });
     token = res.data?.data?.accessToken;

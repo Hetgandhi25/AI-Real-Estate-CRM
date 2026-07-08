@@ -136,7 +136,7 @@ function AiBotPage() {
         customerId,
         messages: [{ from: "customer", text: newMsgText.trim() }],
       });
-      // Trigger AI Agent run in YandoX backend
+      // Trigger AI Agent run in Property backend
       await conversationService.addMessage(created.id, {
         text: newMsgText.trim(),
         from: "customer",

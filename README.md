@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>Yandox Property CRM & AI OpenClaw</h1>
+  <h1>Property Property CRM & AI OpenClaw</h1>
   <p><strong>A production-grade, highly scalable AI-powered Real Estate CRM featuring advanced lead tracking, appointment scheduling, and an integrated WhatsApp automation bot with semantic reasoning.</strong></p>
 </div>
 
@@ -30,7 +30,7 @@
 
 ## 🎯 Project Overview
 
-Yandox Property CRM is a comprehensive Customer Relationship Management (CRM) platform purpose-built for the real estate industry. It streamlines property listings, lead management, and agent-customer interactions. 
+Property Property CRM is a comprehensive Customer Relationship Management (CRM) platform purpose-built for the real estate industry. It streamlines property listings, lead management, and agent-customer interactions. 
 
 Its standout feature is **OpenClaw**, an integrated AI-powered WhatsApp bot. Built on top of local LLMs (Ollama/Qwen3), OpenClaw handles incoming WhatsApp inquiries, understands real estate context, schedules appointments, and autonomously converses with potential buyers, routing complex queries to human agents when necessary.
 
@@ -279,8 +279,8 @@ META_APP_SECRET=your_app_secret
 
 2. **Start Production Services (Using PM2):**
    ```bash
-   NODE_ENV=production pm2 start dist/server.js --name "yandox-api"
-   NODE_ENV=production pm2 start dist/worker.js --name "yandox-worker"
+   NODE_ENV=production pm2 start dist/server.js --name "property-api"
+   NODE_ENV=production pm2 start dist/worker.js --name "property-worker"
    ```
 
 3. **Docker (Optional):** Use the included `docker-compose.yml` to spin up Redis and PostgreSQL quickly.

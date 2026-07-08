@@ -1,12 +1,12 @@
-# 🏠 Yandox CRM — Project Setup Guide
+# 🏠 Property CRM — Project Setup Guide
 
-> Complete guide to setting up the Yandox Real Estate CRM system from scratch.
+> Complete guide to setting up the Property Real Estate CRM system from scratch.
 
 ---
 
-## 📌 What is Yandox CRM?
+## 📌 What is Property CRM?
 
-Yandox is a **production-grade Real Estate CRM** (Customer Relationship Management) system built for property agencies. It helps teams manage:
+Property is a **production-grade Real Estate CRM** (Customer Relationship Management) system built for property agencies. It helps teams manage:
 
 - 🏘️ Property listings with full CRUD
 - 👥 Customer profiles and budgets
@@ -77,7 +77,7 @@ Before you begin, make sure you have the following installed:
 ## 📁 Project Structure
 
 ```
-yandox-crm-source/
+property-crm-source/
 │
 ├── 📁 src/                          # Frontend source code
 │   ├── 📁 api/                      # API client, endpoints, query keys
@@ -166,8 +166,8 @@ VITE_API_BASE_URL=http://localhost:4000/api
 VITE_API_TIMEOUT=30000
 
 # LocalStorage keys for token persistence
-VITE_AUTH_TOKEN_KEY=yandox_access_token
-VITE_AUTH_REFRESH_TOKEN_KEY=yandox_refresh_token
+VITE_AUTH_TOKEN_KEY=property_access_token
+VITE_AUTH_REFRESH_TOKEN_KEY=property_refresh_token
 
 # IMPORTANT: Set to false to use real backend authentication
 # Set to true for frontend-only development (mock data, no backend needed)
@@ -177,7 +177,7 @@ VITE_MOCK_AUTH=false
 VITE_ENABLE_QUERY_DEVTOOLS=true
 
 # Application display name
-VITE_APP_NAME=Yandox
+VITE_APP_NAME=Property
 ```
 
 ### Backend `.env` (inside `backend/` directory)

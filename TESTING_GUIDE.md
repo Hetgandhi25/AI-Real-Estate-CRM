@@ -1,6 +1,6 @@
-# 🧪 Yandox CRM — Testing Guide
+# 🧪 Property CRM — Testing Guide
 
-> Complete guide for testing the Yandox CRM system — from manual testing to automated API tests.
+> Complete guide for testing the Property CRM system — from manual testing to automated API tests.
 
 ---
 
@@ -28,7 +28,7 @@ npm run dev
 # Should show: "Backend server running on http://localhost:4000"
 
 # Terminal 2 — Frontend
-cd ..   (or navigate to yandox-crm-source root)
+cd ..   (or navigate to property-crm-source root)
 npm run dev
 # Should show: "VITE v7.x.x  ready"
 ```
@@ -56,7 +56,7 @@ The project includes a full automated test suite that tests all 11 API modules.
 ### Run the E2E Tests
 
 ```bash
-# From the project root (yandox-crm-source/)
+# From the project root (property-crm-source/)
 # Make sure backend is running first!
 
 node api-tests.mjs
@@ -81,7 +81,7 @@ node api-tests.mjs
 ### Expected Output (100% Pass)
 
 ```
-🔬 Yandox CRM — Full E2E API Test Suite v2
+🔬 Property CRM — Full E2E API Test Suite v2
    Base URL: http://localhost:4000/api
    Time: 2026-05-25T10:56:17.922Z
 
@@ -117,7 +117,7 @@ node api-tests.mjs
 ### Frontend TypeScript Check
 
 ```bash
-# From project root (yandox-crm-source/)
+# From project root (property-crm-source/)
 npm run typecheck
 
 # Zero output = Zero TypeScript errors ✅
@@ -156,14 +156,14 @@ npm run build
 
 1. Open http://localhost:5173
 2. You should be redirected to `/login`
-3. Enter: `admin@yandoxcrm.com` / `Admin@123`
+3. Enter: `admin@propertycrm.com` / `Admin@123`
 4. Click Sign In
 5. ✅ Should redirect to Dashboard
 
 ### Test 2: Wrong Password
 
 1. Go to http://localhost:5173/login
-2. Enter: `admin@yandoxcrm.com` / `wrongpassword`
+2. Enter: `admin@propertycrm.com` / `wrongpassword`
 3. ✅ Should show error message "Invalid email or password"
 4. ✅ Should NOT redirect
 
@@ -184,7 +184,7 @@ npm run build
 
 ### Test 5: Role-Based Access
 
-1. Login as `agent@yandoxcrm.com` / `Agent@123`
+1. Login as `agent@propertycrm.com` / `Agent@123`
 2. Try to navigate to `/analytics`
 3. ✅ Should show "Unauthorized" page (agents cannot access analytics)
 4. Try to navigate to `/settings`
@@ -471,7 +471,7 @@ curl -X POST http://localhost:4000/api/customers \
 # 1. Login
 curl -X POST http://localhost:4000/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"agent@yandoxcrm.com","password":"Agent@123"}'
+  -d '{"email":"agent@propertycrm.com","password":"Agent@123"}'
 # Save refreshToken from response
 
 # 2. Logout (use access token)
@@ -532,9 +532,9 @@ PRE-DEPLOYMENT CHECKLIST
   [ ] node api-tests.mjs → 68/68 passed (100%)
 
   MANUAL AUTH TESTS
-  [ ] Admin login works (admin@yandoxcrm.com / Admin@123)
-  [ ] Manager login works (manager@yandoxcrm.com / Manager@123)
-  [ ] Agent login works (agent@yandoxcrm.com / Agent@123)
+  [ ] Admin login works (admin@propertycrm.com / Admin@123)
+  [ ] Manager login works (manager@propertycrm.com / Manager@123)
+  [ ] Agent login works (agent@propertycrm.com / Agent@123)
   [ ] Wrong password shows error
   [ ] Logout clears session
   [ ] Protected routes redirect to /login

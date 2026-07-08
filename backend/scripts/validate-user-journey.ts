@@ -32,7 +32,7 @@ async function runE2EUserJourney() {
     data: {
       name: "Het Gandhi",
       phone: TEST_PHONE,
-      email: `${TEST_PHONE}@whatsapp.yandox.com`,
+      email: `${TEST_PHONE}@whatsapp.property.com`,
       notes: "E2E User Journey Test."
     }
   });

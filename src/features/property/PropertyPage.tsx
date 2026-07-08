@@ -128,11 +128,11 @@ function PropertyPage() {
 
   // Load favorites & recently viewed from LocalStorage
   useEffect(() => {
-    const savedFavs = localStorage.getItem('yandox_favorites');
+    const savedFavs = localStorage.getItem('property_favorites');
     if (savedFavs) {
       setFavorites(JSON.parse(savedFavs));
     }
-    const savedRecent = localStorage.getItem('yandox_recently_viewed');
+    const savedRecent = localStorage.getItem('property_recently_viewed');
     if (savedRecent) {
       setRecentlyViewed(JSON.parse(savedRecent));
     }
@@ -157,7 +157,7 @@ function PropertyPage() {
       updated = [...favorites, id];
     }
     setFavorites(updated);
-    localStorage.setItem('yandox_favorites', JSON.stringify(updated));
+    localStorage.setItem('property_favorites', JSON.stringify(updated));
   };
 
   // Add/Remove from Comparison list
@@ -179,7 +179,7 @@ function PropertyPage() {
     setSelectedProperty(property);
     let updated = [property, ...recentlyViewed.filter(p => p.id !== property.id)].slice(0, 5);
     setRecentlyViewed(updated);
-    localStorage.setItem('yandox_recently_viewed', JSON.stringify(updated));
+    localStorage.setItem('property_recently_viewed', JSON.stringify(updated));
   };
 
   // Simulate AI Analysis

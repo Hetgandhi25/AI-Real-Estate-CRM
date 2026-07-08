@@ -21,7 +21,7 @@
 
 ## Overview
 
-This is the **initial prototype** of the Yandox Property CRM WhatsApp automation system, created to validate core business logic:
+This is the **initial prototype** of the Property Property CRM WhatsApp automation system, created to validate core business logic:
 
 - Can users describe their property requirements conversationally on WhatsApp?
 - Can we extract structured data from free-form text using AI?
@@ -561,7 +561,7 @@ Flow:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│                     YANDOX PROPERTY CRM                        │
+│                        PROPERTY CRM                            │
 ├────────────────────────────────────────────────────────────────┤
 │                                                                │
 │  Jun 2026                 Jul 2026              Aug 2026       │
@@ -679,7 +679,7 @@ Headers: customer_phone, location, property_type, max_price, min_price, size_sqf
 
 ## Summary
 
-This prototype successfully demonstrated the core Yandox Property CRM use case using low-code tools and AI. While not production-ready due to Google Sheets limitations, it served as the architectural blueprint for more scalable solutions.
+This prototype successfully demonstrated the core Property Property CRM use case using low-code tools and AI. While not production-ready due to Google Sheets limitations, it served as the architectural blueprint for more scalable solutions.
 
 **Key Takeaway**: This version proved that conversational property search is feasible and user-friendly, validating the business case for investment in a production-grade system.
 

@@ -6,5 +6,5 @@ export const CHART_TOOLTIP_STYLE = {
 } as const;
 
 export const CHART_GRADIENT_IDS = {
-  customerGrowth: "yandox-customer-growth-fill",
+  customerGrowth: "property-customer-growth-fill",
 } as const;

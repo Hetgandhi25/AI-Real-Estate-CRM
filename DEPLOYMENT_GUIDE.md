@@ -1,6 +1,6 @@
-# 🚀 Yandox CRM — Deployment Guide
+# 🚀 Property CRM — Deployment Guide
 
-> Complete guide for deploying the Yandox CRM to production environments.
+> Complete guide for deploying the Property CRM to production environments.
 
 ---
 
@@ -62,7 +62,7 @@ datasource db {
 
 ```env
 # Replace the SQLite URL with PostgreSQL
-DATABASE_URL="postgresql://username:password@host:5432/yandox_crm?schema=public"
+DATABASE_URL="postgresql://username:password@host:5432/property_crm?schema=public"
 ```
 
 ### Step 3: Re-run migrations
@@ -145,11 +145,11 @@ For the React frontend, use **Netlify** or **Vercel** (better for static sites):
 ```env
 VITE_API_BASE_URL=https://your-backend-url.railway.app/api
 VITE_API_TIMEOUT=30000
-VITE_AUTH_TOKEN_KEY=yandox_access_token
-VITE_AUTH_REFRESH_TOKEN_KEY=yandox_refresh_token
+VITE_AUTH_TOKEN_KEY=property_access_token
+VITE_AUTH_REFRESH_TOKEN_KEY=property_refresh_token
 VITE_MOCK_AUTH=false
 VITE_ENABLE_QUERY_DEVTOOLS=false
-VITE_APP_NAME=Yandox
+VITE_APP_NAME=Property
 ```
 
 8. Click **Deploy**
@@ -230,9 +230,9 @@ sudo systemctl enable postgresql
 sudo -u postgres psql
 
 # Inside psql:
-CREATE DATABASE yandox_crm;
-CREATE USER yandox_user WITH PASSWORD 'your_strong_password';
-GRANT ALL PRIVILEGES ON DATABASE yandox_crm TO yandox_user;
+CREATE DATABASE property_crm;
+CREATE USER property_user WITH PASSWORD 'your_strong_password';
+GRANT ALL PRIVILEGES ON DATABASE property_crm TO property_user;
 \q
 ```
 
@@ -240,12 +240,12 @@ GRANT ALL PRIVILEGES ON DATABASE yandox_crm TO yandox_user;
 
 ```bash
 # Create app directory
-mkdir -p /var/www/yandox
-cd /var/www/yandox
+mkdir -p /var/www/property
+cd /var/www/property
 
 # Clone or copy your project
-git clone https://github.com/your-username/yandox-crm-source.git .
-# OR use: scp -r local-folder/ user@server:/var/www/yandox/
+git clone https://github.com/your-username/property-crm-source.git .
+# OR use: scp -r local-folder/ user@server:/var/www/property/
 
 # Setup backend
 cd backend
@@ -275,15 +275,15 @@ npm run build
 
 #### Step 3: Configure PM2
 
-Create `ecosystem.config.js` in `/var/www/yandox/backend/`:
+Create `ecosystem.config.js` in `/var/www/property/backend/`:
 
 ```javascript
 module.exports = {
   apps: [
     {
-      name: "yandox-backend",
+      name: "property-backend",
       script: "dist/server.js",
-      cwd: "/var/www/yandox/backend",
+      cwd: "/var/www/property/backend",
       env: {
         NODE_ENV: "production",
         PORT: 4000,
@@ -299,7 +299,7 @@ module.exports = {
 
 ```bash
 # Start with PM2
-cd /var/www/yandox/backend
+cd /var/www/property/backend
 pm2 start ecosystem.config.js
 
 # Save PM2 process list
@@ -311,13 +311,13 @@ pm2 startup
 
 # Check status
 pm2 status
-pm2 logs yandox-backend
+pm2 logs property-backend
 ```
 
 #### Step 4: Configure Nginx
 
 ```bash
-sudo nano /etc/nginx/sites-available/yandox
+sudo nano /etc/nginx/sites-available/property
 ```
 
 Paste this config:
@@ -327,7 +327,7 @@ Paste this config:
 server {
     listen 80;
     server_name your-domain.com www.your-domain.com;
-    root /var/www/yandox/dist/client;
+    root /var/www/property/dist/client;
     index index.html;
 
     # React Router support — always serve index.html
@@ -363,7 +363,7 @@ server {
 
 ```bash
 # Enable the site
-sudo ln -s /etc/nginx/sites-available/yandox /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/property /etc/nginx/sites-enabled/
 
 # Test config
 sudo nginx -t
@@ -399,7 +399,7 @@ NODE_ENV=production
 CORS_ORIGIN=https://your-domain.com
 
 # PostgreSQL connection string
-DATABASE_URL="postgresql://yandox_user:your_strong_password@localhost:5432/yandox_crm?schema=public"
+DATABASE_URL="postgresql://property_user:your_strong_password@localhost:5432/property_crm?schema=public"
 
 # STRONG random secrets — generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"
 JWT_ACCESS_TOKEN_SECRET=<64-char-random-hex>
@@ -419,8 +419,8 @@ REFRESH_TOKEN_COOKIE_NAME=refresh_token
 # Your production API URL
 VITE_API_BASE_URL=https://api.your-domain.com/api
 VITE_API_TIMEOUT=30000
-VITE_AUTH_TOKEN_KEY=yandox_access_token
-VITE_AUTH_REFRESH_TOKEN_KEY=yandox_refresh_token
+VITE_AUTH_TOKEN_KEY=property_access_token
+VITE_AUTH_REFRESH_TOKEN_KEY=property_refresh_token
 
 # Never use mock auth in production
 VITE_MOCK_AUTH=false
@@ -428,7 +428,7 @@ VITE_MOCK_AUTH=false
 # Disable devtools in production
 VITE_ENABLE_QUERY_DEVTOOLS=false
 
-VITE_APP_NAME=Yandox
+VITE_APP_NAME=Property
 ```
 
 ---
@@ -438,7 +438,7 @@ VITE_APP_NAME=Yandox
 Create `.github/workflows/deploy.yml`:
 
 ```yaml
-name: Deploy Yandox CRM
+name: Deploy Property CRM
 
 on:
   push:
@@ -475,11 +475,11 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /var/www/yandox
+            cd /var/www/property
             git pull origin main
             cd backend && npm ci && npx prisma migrate deploy && npm run build
             cd .. && npm ci && npm run build
-            pm2 restart yandox-backend
+            pm2 restart property-backend
 ```
 
 ---
@@ -495,7 +495,7 @@ curl https://api.your-domain.com/api/health
 # 2. Login
 curl -X POST https://api.your-domain.com/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"admin@yandoxcrm.com","password":"Admin@123"}'
+  -d '{"email":"admin@propertycrm.com","password":"Admin@123"}'
 
 # 3. Public properties
 curl https://api.your-domain.com/api/properties
@@ -548,7 +548,7 @@ PRODUCTION SECURITY CHECKLIST
 
 ```bash
 # On your VPS
-cd /var/www/yandox
+cd /var/www/property
 
 # Pull latest code
 git pull origin main
@@ -566,7 +566,7 @@ npm install
 npm run build
 
 # Restart backend (frontend is static, just rebuilt)
-pm2 restart yandox-backend
+pm2 restart property-backend
 
 # Verify
 pm2 status
@@ -579,14 +579,14 @@ curl http://localhost:4000/api/health
 
 ```bash
 # Backup PostgreSQL database
-pg_dump -U yandox_user yandox_crm > backup_$(date +%Y%m%d).sql
+pg_dump -U property_user property_crm > backup_$(date +%Y%m%d).sql
 
 # Restore from backup
-psql -U yandox_user yandox_crm < backup_20260525.sql
+psql -U property_user property_crm < backup_20260525.sql
 
 # Automate with cron (daily at 2am)
 crontab -e
-# Add: 0 2 * * * pg_dump -U yandox_user yandox_crm > /backups/yandox_$(date +\%Y\%m\%d).sql
+# Add: 0 2 * * * pg_dump -U property_user property_crm > /backups/property_$(date +\%Y\%m\%d).sql
 ```
 
 ---
@@ -597,7 +597,7 @@ crontab -e
 
 ```bash
 # Check PM2 logs
-pm2 logs yandox-backend
+pm2 logs property-backend
 
 # Check for port conflicts
 sudo netstat -tlnp | grep 4000
@@ -613,7 +613,7 @@ pm2 env 0
 sudo tail -f /var/log/nginx/error.log
 
 # Verify build exists
-ls /var/www/yandox/dist/client/
+ls /var/www/property/dist/client/
 
 # Check Nginx config
 sudo nginx -t
@@ -623,7 +623,7 @@ sudo nginx -t
 
 ```bash
 # Test database connection
-cd /var/www/yandox/backend
+cd /var/www/property/backend
 npx prisma db push
 
 # Check PostgreSQL is running

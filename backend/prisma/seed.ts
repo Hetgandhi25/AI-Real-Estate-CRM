@@ -25,7 +25,7 @@ async function main() {
   const admin = await prisma.user.create({
     data: {
       name: "Admin User",
-      email: "admin@yandoxcrm.com",
+      email: "admin@propertycrm.com",
       password: adminPassword,
       role: "admin",
     },
@@ -34,7 +34,7 @@ async function main() {
   const manager = await prisma.user.create({
     data: {
       name: "Manager User",
-      email: "manager@yandoxcrm.com",
+      email: "manager@propertycrm.com",
       password: managerPassword,
       role: "manager",
     },
@@ -43,7 +43,7 @@ async function main() {
   const agentUser = await prisma.user.create({
     data: {
       name: "Sarah Mitchell",
-      email: "agent@yandoxcrm.com",
+      email: "agent@propertycrm.com",
       password: agentPassword,
       role: "agent",
     },
@@ -52,7 +52,7 @@ async function main() {
   const testUser = await prisma.user.create({
     data: {
       name: "Test User",
-      email: "test@yandoxcrm.com",
+      email: "test@propertycrm.com",
       password: testPassword,
       role: "agent",
     },
@@ -61,7 +61,7 @@ async function main() {
   const agentUser2 = await prisma.user.create({
     data: {
       name: "James Harrington",
-      email: "james@yandoxcrm.com",
+      email: "james@propertycrm.com",
       password: await bcrypt.hash("Agent2@123", SALT_ROUNDS),
       role: "agent",
     },
@@ -70,7 +70,7 @@ async function main() {
   const agentUser3 = await prisma.user.create({
     data: {
       name: "Priya Sharma",
-      email: "priya@yandoxcrm.com",
+      email: "priya@propertycrm.com",
       password: await bcrypt.hash("Agent3@123", SALT_ROUNDS),
       role: "agent",
     },

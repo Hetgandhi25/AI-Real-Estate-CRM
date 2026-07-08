@@ -3,7 +3,7 @@ import { redisConnection } from "./modules/whatsapp/redis.js";
 import { whatsappWorker } from "./modules/whatsapp/whatsapp.worker.js";
 
 async function bootstrap() {
-  console.log("🚀 Starting Yandox Worker Process...");
+  console.log("🚀 Starting Property Worker Process...");
   
   // Validate environment occurs automatically via env.js import
   

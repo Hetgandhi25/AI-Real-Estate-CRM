@@ -14,9 +14,9 @@ function parseEnv() {
   const raw = {
     VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL ?? "http://localhost:4000/api",
     VITE_API_TIMEOUT: import.meta.env.VITE_API_TIMEOUT ?? "30000",
-    VITE_AUTH_TOKEN_KEY: import.meta.env.VITE_AUTH_TOKEN_KEY ?? "yandox_access_token",
+    VITE_AUTH_TOKEN_KEY: import.meta.env.VITE_AUTH_TOKEN_KEY ?? "property_access_token",
     VITE_AUTH_REFRESH_TOKEN_KEY:
-      import.meta.env.VITE_AUTH_REFRESH_TOKEN_KEY ?? "yandox_refresh_token",
+      import.meta.env.VITE_AUTH_REFRESH_TOKEN_KEY ?? "property_refresh_token",
     VITE_MOCK_AUTH:
       (import.meta.env.VITE_MOCK_AUTH ?? (import.meta.env.DEV ? "true" : "false")) === "true",
     VITE_ENABLE_QUERY_DEVTOOLS:

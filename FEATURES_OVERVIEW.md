@@ -1,6 +1,6 @@
-# 🏠 Yandox CRM — Features Overview
+# 🏠 Property CRM — Features Overview
 
-> Complete guide to every module, page, and feature in the Yandox Real Estate CRM.
+> Complete guide to every module, page, and feature in the Property Real Estate CRM.
 
 ---
 
